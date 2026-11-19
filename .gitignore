@@ -1,0 +1,24 @@
+# Gradle
+.gradle/
+build/
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Android build outputs
+*.apk
+*.aab
+*.aar
+
+# Signing and local configuration
+keystore.properties
+*.jks
+*.keystore
+local.properties
+
+# macOS
+.DS_Store
