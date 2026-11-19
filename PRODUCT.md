@@ -1,151 +1,129 @@
-# Aztarna — Definición de Producto y Arquitectura Técnica
+# Aztarna — Product Definition & Technical Architecture
 
-> **Aztarna** (*"huella"* o *"rastro"* en euskera) es una aplicación nativa para Android diseñada bajo principios de **privacidad estricta**, **coste operativo cero** y **mínima fricción**, cuyo objetivo es avisar proactivamente al usuario únicamente cuando ocurre un evento astronómico visible a simple vista y las condiciones meteorológicas locales permiten disfrutarlo.
-
----
-
-## 1. Visión de Producto e Identidad
-
-* **Nombre:** **Aztarna** (minimalista, eufónico en inglés, libre de colisiones en Google Play dentro del sector astronómico y evocador de las estelas celestes).
-* **Propósito:** Proyecto personal de portfolio técnico y publicación limpia en Google Play, sin modelo de negocio invasivo ni publicidad.
-* **Diferencial frente a la competencia** (*Heavens-Above*, *ISS Detector*, *Sky Tonight*, *Stellarium*):
-  * Cero publicidad, cero muros de pago y cero ruido técnico.
-  * **Curación inteligente:** En lugar de bombardear con decenas de pasos de satélites invisibles o alertas bajo cielos nublados, actúa como un filtro inteligente que responde a una única pregunta: *«¿Merece la pena salir a mirar al cielo esta noche?»*.
+## 1. Identity & Purpose
+- **Name:** **Aztarna** (*"footprint"* or *"trail"* in Basque). Minimalist, exotic, easy to pronounce in English, free of direct naming collisions in the astronomy space, and evocative of satellite trails and shooting stars.
+- **Purpose:** Personal Android portfolio project built for continuous learning and clean publication on Google Play. No commercial monetization or ads.
+- **Core Philosophy:** Zero/minimal operational cost, strict user privacy by design, and zero friction.
 
 ---
 
-## 2. Alcance Funcional
+## 2. Functional Scope (MVP vs. Future)
 
-### Versión 1 (MVP)
-* **Eventos celestes monitorizados:**
-  * Pasos brillantes de la Estación Espacial Internacional (**ISS**) y satélites destacados.
-  * Lluvias de estrellas principales (Perseidas, Gemínidas, Leónidas, etc.).
-  * Eventos lunares y acercamientos planetarios notables.
-* **Motor de decisión ("¿Compensa mirar?"):** Filtra eventos descartando aquellos con baja elevación sobre el horizonte, brillo insuficiente o cobertura nubosa desfavorable.
-* **Notificaciones proactivas:** Alertas locales programadas con antelación óptima únicamente cuando se cumplen las condiciones astronómicas y meteorológicas.
-* **Pantalla principal accionable:**
-  * *Hero Card ("Esta noche"):* Muestra el evento estrella del día si merece la pena salir, o un mensaje honesto de descanso si el cielo estará cubierto.
-  * *Agenda semanal:* Lista cronológica de los próximos eventos candidatos con su indicador de visibilidad.
-* **Privacidad y accesibilidad:** Ubicación aproximada sin cuentas de usuario, soporte para selección manual de ciudad como *fallback* e interfaz localizada (`es`, `eu`, `en`).
+### Version 1 (MVP)
+- **Supported Events:** Bright International Space Station (ISS) and notable satellite passes, major meteor showers, and significant lunar or planetary events.
+- **"Is It Worth Looking?" Filter:** Evaluates local visibility (apparent brightness/magnitude, maximum elevation above the horizon) and forecasted cloud cover to discard events that are faint or obscured by bad weather.
+- **Proactive Alerts:** Silent background evaluation that triggers local notifications in advance *only* when visual and weather conditions align.
+- **App Home Experience:** Clean, single-screen Material 3 interface displaying:
+  - **Tonight's Hero Card:** Highlights the top worthwhile event or displays an honest rest state (*"Overcast sky or no notable events tonight"*).
+  - **Upcoming Agenda:** Minimalist chronological list for the next 3–5 days with visibility indicators.
+- **Location & Privacy:** Relies on approximate location (`ACCESS_COARSE_LOCATION`) with a manual city selector fallback. User coordinates are never stored on the server.
+- **Monetization:** 100% ad-free (no AdMob or third-party tracking SDKs).
 
-### Versión 2 (Iteraciones Futuras)
-* Widget de escritorio con la próxima ventana celeste despejada.
-* Brújula de cielo básica apoyada en sensores del dispositivo (acelerómetro y magnetómetro).
-* Filtros granulares de brillo y categorías personalizables por el usuario.
+### Version 2 (Future Iterations)
+- Home screen widget displaying the next clear-sky window.
+- Lightweight sky compass orientation powered by device sensors (accelerometer/magnetometer).
+- Granular user filters for event categories and minimum brightness thresholds.
 
 ---
 
-## 3. Arquitectura Técnica (Modelo Híbrido *Stateless*)
+## 3. System Architecture (Hybrid Stateless + Offline-First)
 
-Para evitar cálculos orbitales pesados en el dispositivo móvil y mantener una batería intacta sin comprometer la privacidad, el sistema adopta una arquitectura cliente-servidor **stateless** y **Offline-First**:
+### Tech Stack
+- **Android Client:** Kotlin, Jetpack Compose (Material 3), Hilt, Room, DataStore, WorkManager, and AlarmManager (following the clean architecture baseline of *Txoka*).
+- **Self-Hosted Backend:** Lightweight stateless REST API.
 
-1. **Backend Ligero (*Stateless* en servidor propio):**
-   * Descarga periódicamente los ficheros públicos de elementos orbitales (TLEs desde *Celestrak*) y consulta pronósticos meteorológicos gratuitos (*Open-Meteo API*).
-   * Expone un único endpoint `GET /v1/sky-forecast?lat={lat}&lon={lon}&lang={lang}`.
-   * **Cero persistencia de usuario:** Recibe las coordenadas redondeadas en memoria, calcula los pases visibles y el clima, devuelve un JSON ligero (~2 KB) y descarta la petición sin almacenar IPs ni ubicaciones en base de datos.
-2. **Cliente Android (Kotlin + Jetpack Compose):**
-   * Recibe el JSON procesado, lo persiste en **Room** para garantizar disponibilidad sin conexión y delega la visualización en una UI reactiva con Material 3.
-
-### Estructura de Paquetes (Clean Architecture Feature-First)
-
-```text
-com.igarciadelamo.aztarna/
-│
-├── core/
-│   ├── network/        # Cliente HTTP (Retrofit/Ktor) y DTOs
-│   ├── database/       # Room Database, DAOs y Entidades
-│   ├── datastore/      # Preferencias de usuario y ubicación redondeada
-│   ├── workers/        # WorkManager, AlarmManager y BroadcastReceivers
-│   └── ui/             # Tema Material 3, tipografía y componentes compartidos
-│
-├── feature/home/
-│   ├── data/           # Repositorio Offline-First y Mappers
-│   ├── domain/         # Modelos puros de dominio y Casos de Uso
-│   └── presentation/   # HomeScreen (Compose), HomeViewModel y HomeUiState
-│
-└── feature/settings/
-    ├── domain/
-    └── presentation/   # Configuración de ubicación, permisos y alertas
-```
+### Division of Responsibilities
+1. **Stateless Backend:**
+   - Acts as an on-demand computation and weather aggregation layer.
+   - Receives rounded coordinates (`lat`, `lon` rounded to 1 decimal place, ~11 km precision) and preferred language (`es`, `eu`, `en`).
+   - Computes orbital passes, cross-references public weather forecasts (e.g., Open-Meteo), returns a compact JSON payload (~2 KB), and discards the request immediately without persisting coordinates or IP logs.
+2. **Android Client (Offline-First):**
+   - **DataStore:** Stores user settings and the last known approximate or manual location.
+   - **Room:** Caches events and forecast expiration metadata so the app opens instantaneously offline.
+   - **WorkManager:** Runs a periodic sync every 12 hours (when network is available) to fetch updated forecasts, refresh Room, and schedule alerts.
+   - **AlarmManager:** Schedules exact local alerts (`setExactAndAllowWhileIdle`, degrading gracefully to `setAndAllowWhileIdle` if exact alarm permission is revoked) pointing to a `BroadcastReceiver` (`SkyAlertReceiver`). A `BootReceiver` restores scheduled alarms from Room upon device reboot (`BOOT_COMPLETED`).
 
 ---
 
-## 4. Contrato de API (`GET /v1/sky-forecast`)
+## 4. Project Structure (Clean Architecture / Feature-First)
 
-### Petición
-```http
-GET /v1/sky-forecast?lat=40.4&lon=-3.7&lang=es
-```
+    com.igarciadelamo.aztarna/
+    │
+    ├── core/
+    │   ├── network/        # HTTP client (Ktor/Retrofit) & API DTOs
+    │   ├── database/       # Room database, Entities, DAOs, Mappers
+    │   ├── datastore/      # User preferences & approximate location storage
+    │   ├── workers/        # WorkManager sync & AlarmManager/BroadcastReceivers
+    │   └── ui/             # Shared Material 3 theme, dark sky palette & components
+    │
+    ├── feature/home/
+    │   ├── data/           # Repository implementation (Offline-First coordination)
+    │   ├── domain/         # Pure Kotlin domain models & Use Cases
+    │   └── presentation/   # HomeScreen (Compose), ViewModel & HomeUiState
+    │
+    └── feature/settings/
+        ├── domain/
+        └── presentation/   # Notification toggles & manual location picker
 
-### Respuesta (`200 OK`)
-```json
-{
-  "generated_at": "2026-11-15T18:00:00Z",
-  "valid_until": "2026-11-16T08:00:00Z",
-  "tonight_summary": {
-    "is_worth_going_out": true,
-    "headline": "Paso brillante de la ISS",
-    "weather_condition": "Despejado",
-    "cloud_cover_percent": 10
-  },
-  "events": [
+---
+
+## 5. Stateless API Contract (`GET /v1/sky-forecast`)
+
+**Request:**
+
+    GET /v1/sky-forecast?lat=40.4&lon=-3.7&lang=en
+
+**Response (`200 OK`):**
+
     {
-      "id": "iss_20261115_2142",
-      "type": "SATELLITE",
-      "title": "Estación Espacial Internacional (ISS)",
-      "subtitle": "Muy brillante, fácil de ver a simple vista",
-      "notify_at": "2026-11-15T21:27:00Z",
-      "peak_time": "2026-11-15T21:42:15Z",
-      "duration_seconds": 360,
-      "visibility": {
-        "magnitude": -3.8,
-        "max_elevation_deg": 74,
-        "start_azimuth": "Oeste",
-        "end_azimuth": "Noreste",
-        "cloud_cover_percent": 10,
-        "is_recommended": true
-      }
+      "generated_at": "2026-11-15T18:00:00Z",
+      "valid_until": "2026-11-16T08:00:00Z",
+      "tonight_summary": {
+        "is_worth_going_out": true,
+        "headline": "Bright ISS Pass",
+        "weather_condition": "Clear",
+        "cloud_cover_percent": 10
+      },
+      "events": [
+        {
+          "id": "iss_20261115_2142",
+          "type": "SATELLITE",
+          "title": "International Space Station (ISS)",
+          "subtitle": "Very bright, easily visible to the naked eye",
+          "notify_at": "2026-11-15T21:27:00Z",
+          "peak_time": "2026-11-15T21:42:15Z",
+          "duration_seconds": 360,
+          "visibility": {
+            "magnitude": -3.8,
+            "max_elevation_deg": 74,
+            "start_azimuth": "West",
+            "end_azimuth": "Northeast",
+            "cloud_cover_percent": 10,
+            "is_recommended": true
+          }
+        }
+      ]
     }
-  ]
-}
-```
 
 ---
 
-## 5. Persistencia Local (Room) y Estado de UI (Compose)
+## 6. Local Database (Room) & UI State (Compose)
 
-### Entidades de Base de Datos
-* **`CelestialEventEntity` (`celestial_events`):** Almacena cada evento con su identificador único, tipo (`SATELLITE`, `METEOR_SHOWER`, `PLANET`, `MOON`, `ECLIPSE`), timestamps ISO-8601 (`notifyAt`, `peakTime`), parámetros de visibilidad (`magnitude`, `maxElevationDeg`, `startAzimuth`, `endAzimuth`, `cloudCoverPercent`) y el flag `isRecommended`.
-* **`ForecastCacheEntity` (`forecast_cache`):** Registro único (`id = 1`) que almacena el resumen global de la noche (`isWorthGoingOut`, `headline`, `weatherCondition`, `validUntil`) para alimentar la *Hero Card* incluso sin red.
-
-### Estado Unidireccional de la UI (`HomeUiState`)
-```kotlin
-sealed interface HomeUiState {
-    data object Loading : HomeUiState
-    data class Success(
-        val topEvent: CelestialEvent?,
-        val forecastSummary: String,
-        val upcomingEvents: List<CelestialEvent>,
-        val isWorthGoingOut: Boolean
-    ) : HomeUiState
-    data class Error(
-        val message: String,
-        val hasCachedData: Boolean
-    ) : HomeUiState
-}
-```
+- **Room Entities:**
+  - `CelestialEventEntity`: Stores individual event fields (`id`, `type`, `title`, `notifyAt`, `peakTime`, `magnitude`, `maxElevationDeg`, azimuths, `cloudCoverPercent`, `isRecommended`, `cachedAt`).
+  - `ForecastCacheEntity`: Single-row table storing global forecast metadata (`validUntil`, `isWorthGoingOut`, `headline`, `weatherCondition`, `cloudCoverPercent`).
+- **UI State (`HomeUiState`):** Sealed interface following Unidirectional Data Flow (`Loading`, `Success`, `Error` with cached data fallback).
 
 ---
 
-## 6. Planificación en Segundo Plano y Permisos (Google Play Compliance)
+## 7. Google Play Location Permission Strategy
+1. **Approximate Location Only:** Requests `ACCESS_COARSE_LOCATION` (~3 km radius), avoiding `ACCESS_FINE_LOCATION`.
+2. **Two-Step Contextual Flow:**
+   - Foreground permission is requested only when the user opts into automatic location (with a manual city selector fallback if denied).
+   - Background location (`ACCESS_BACKGROUND_LOCATION`) is preceded by an in-app **Prominent Disclosure** screen clearly explaining why periodic approximate location checks are needed and confirming that coordinates are never stored.
 
-### Sincronización y Alertas (`WorkManager` + `AlarmManager`)
-1. **Sincronización periódica (`WorkManager`):** Ejecuta cada 12 horas con restricción de red, consulta `/v1/sky-forecast` con coordenadas redondeadas a 1 decimal (~11 km), actualiza transaccionalmente **Room** y programa alarmas para eventos con `isRecommended == true`.
-2. **Disparo exacto (`AlarmManager`):** Utiliza `setExactAndAllowWhileIdle()` (con degradación elegante a `setAndAllowWhileIdle()` si no hay permiso de alarma exacta en Android 14+) para despertar un `BroadcastReceiver` (`SkyAlertReceiver`) en el instante exacto de `notifyAt`.
-3. **Persistencia tras reinicio:** Un `BootReceiver` (`ACTION_BOOT_COMPLETED`) restaura las alarmas futuras pendientes leyendo directamente desde **Room** sin depender de conexión a internet.
+---
 
-### Política de Ubicación y Privacidad
-* **Minimización de precisión:** Se solicita exclusivamente `ACCESS_COARSE_LOCATION` (ubicación aproximada), suficiente para cálculos astronómicos y meteorológicos.
-* **Flujo en dos fases:**
-  1. *Primer plano:* Solicitado de forma contextual al activar la ubicación automática (con selector manual de ciudad como alternativa si se deniega).
-  2. *Segundo plano (`ACCESS_BACKGROUND_LOCATION`):* Precedido obligatoriamente por una pantalla explicativa propia (*Prominent Disclosure*) que detalla por qué se requiere el acceso periódico y garantiza que las coordenadas nunca se almacenan ni comparten.
+## 8. Competitive Positioning
+- **Competitors (*Heavens-Above*, *ISS Detector*, *Sky Tonight*, *Stellarium*):** Either suffer from dated interfaces, intrusive ads, and paywalls, or act as heavy planetarium apps that overwhelm users with raw orbital data.
+- **Aztarna's Differentiator:** Modern Material 3 design, zero ads, strict privacy, and smart curation—acting as a quiet filter that only alerts you when the sky is clear and an event is genuinely worth stepping outside to see.

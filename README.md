@@ -1,11 +1,10 @@
 # Aztarna
 
-Aplicación Android nativa de avisos astronómicos con privacidad estricta. Avisa solo cuando un
-evento celeste es visible a simple vista y las condiciones meteorológicas locales permiten
-disfrutarlo.
+Native Android app for astronomy alerts with strict privacy. It only notifies you when a celestial
+event is visible to the naked eye and the local weather allows you to enjoy it.
 
-La definición de producto y la arquitectura técnica están en [`PRODUCT.md`](PRODUCT.md).
+The product definition and technical architecture live in [`PRODUCT.md`](PRODUCT.md).
 
-## Estado
+## Status
 
-Repositorio recién inicializado. Todavía no hay código.
+Repository just initialized. No code yet.
