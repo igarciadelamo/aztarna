@@ -5,6 +5,13 @@ event is visible to the naked eye and the local weather allows you to enjoy it.
 
 The product definition and technical architecture live in [`PRODUCT.md`](PRODUCT.md).
 
+## Repository layout
+
+Monorepo with two projects:
+
+- [`android/`](android/) — Kotlin + Jetpack Compose client, offline-first.
+- [`backend/`](backend/) — stateless REST API for sky forecasts.
+
 ## Status
 
 Repository just initialized. No code yet.
