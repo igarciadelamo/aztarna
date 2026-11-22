@@ -15,7 +15,7 @@
   - Meteor showers: the ~10 major showers in the static table (see pipeline doc §2.4).
   - Moon: full moon, supermoon, lunar eclipses.
   - Planets: oppositions of Mars, Jupiter and Saturn; conjunctions closer than 2° between bright planets or with the Moon.
-- **"Is It Worth Looking?" Filter:** Evaluates local visibility (apparent brightness/magnitude, maximum elevation above the horizon) and forecasted cloud cover to discard events that are faint or obscured by bad weather. Initial thresholds (defaults, to be tuned after field testing):
+- **"Is It Worth Looking?" Filter:** Runs on the server only. Evaluates local visibility (apparent brightness/magnitude, maximum elevation above the horizon) and forecasted cloud cover to discard events that are faint or obscured by bad weather. Initial thresholds (defaults, to be tuned after field testing):
 
   | Category | Worth looking when |
   |---|---|
@@ -26,7 +26,7 @@
   | Moon / eclipse | Moon elevation ≥ 10° during the event. |
 
   Assumes a suburban sky (~Bortle 5); light pollution is not modeled.
-- **"Tonight" definition:** From local civil dusk (Sun at −6°) to the next civil dawn, using the device time zone. The API returns UTC; the client converts it.
+- **"Tonight" definition:** From local civil dusk (Sun at −6°) to the next civil dawn, computed by the server for the rounded location and returned as `tonight.dusk` / `tonight.dawn` (UTC). The client only formats them in the device time zone.
 - **Proactive Alerts:** Silent background evaluation that triggers local notifications in advance *only* when visual and weather conditions align.
 - **App Home Experience:** Clean, single-screen Material 3 interface displaying:
   - **Tonight's Hero Card:** Highlights the top worthwhile event or displays an honest rest state (*"Overcast sky or no notable events tonight"*).
@@ -43,9 +43,35 @@
 
 ## 3. System Architecture (Hybrid Stateless + Offline-First)
 
+### Principle: Thin Client
+**The app computes nothing.** All astronomy, weather evaluation, filtering, ranking and timing
+decisions (which event is tonight's highlight, when to notify, when to re-check the weather) happen on
+the server and arrive as ready-to-use fields. The client only:
+- displays server data, localizing codes (`target`, `reason_code`, `condition_code`, directions) with Android string resources;
+- formats UTC timestamps in the device time zone;
+- schedules alarms and jobs at the exact times the server provides;
+- stores the last response in Room so it works offline.
+
+This lets us fix or tune evaluation logic without an app release. Any new client-side rule needs a
+reason why the server cannot provide it.
+
 ### Tech Stack
 - **Android Client:** Kotlin, Jetpack Compose (Material 3), Hilt, Room, DataStore, WorkManager, and AlarmManager (following the clean architecture baseline of *Txoka*, TODO: link repo). Min SDK 26 (proposed), target the latest SDK.
-- **Self-Hosted Backend:** Lightweight stateless REST API.
+- **Self-Hosted Backend:** Lightweight stateless REST API in **Python (FastAPI + Skyfield)**.
+
+### Backend Language Decision
+We keep a backend: it lets evaluation logic change without app releases and gives a place for version
+control (§5). Language comparison:
+
+| | Python | Go | Kotlin (Ktor) |
+|---|---|---|---|
+| Astronomy libraries | **Skyfield**: best in class (SGP4, satellite sunlit check, rise/set, twilight, moon phases, oppositions/conjunctions, lunar eclipses) | Weak: `go-satellite` is a thinly maintained SGP4 port; no Astronomy Engine port | Astronomy Engine Kotlin; SGP4 only via Orekit (heavy) |
+| Deployment | Runtime needed, ~100 MB RAM | Single binary, ~15 MB RAM, cheapest | JVM, ~200 MB RAM |
+| Code sharing with Android | None | None | Possible, but irrelevant because the client computes nothing |
+
+**Choice: Python.** The hard part of this project is astronomy, and Skyfield makes it the least code
+to write. Go would only win on hosting cost, at the price of writing astronomy code ourselves. Kotlin's
+advantage (sharing code with the app) disappears with the thin-client principle.
 
 ### Division of Responsibilities
 1. **Stateless Backend:**
@@ -56,8 +82,8 @@
    - **DataStore:** Stores user settings and the last known approximate or manual location.
    - **Room:** Caches events and forecast expiration metadata so the app opens instantaneously offline.
    - **WorkManager:** Runs a periodic sync every 12 hours (when network is available) to fetch updated forecasts, refresh Room, and schedule alerts. It uses the last saved location and never requests location in the background.
-   - **Weather re-check:** For each candidate event, a one-off `WorkManager` job runs ~2 h before `window_start` to re-sync. If the fresh forecast flips `is_worth_looking` to false, the alert is cancelled. This keeps alerts from relying on a forecast up to 12 h old.
-   - **AlarmManager:** Alerts fire 30 min before `window_start`. Uses `setExactAndAllowWhileIdle` when the user has granted exact alarms (`SCHEDULE_EXACT_ALARM`, denied by default on Android 14+), otherwise `setAndAllowWhileIdle`. The 30-min lead absorbs Doze delays, so the app works without the exact-alarm grant. Alarms go to `SkyAlertReceiver`.
+   - **Weather re-check:** For each candidate event, a one-off `WorkManager` job runs at the server-provided `recheck_at` (~2 h before `window_start`) to re-sync. If the fresh forecast flips `is_worth_looking` to false, the alert is cancelled. This keeps alerts from relying on a forecast up to 12 h old.
+   - **AlarmManager:** Alerts fire at the server-provided `notify_at` (30 min before `window_start`). Uses `setExactAndAllowWhileIdle` when the user has granted exact alarms (`SCHEDULE_EXACT_ALARM`, denied by default on Android 14+), otherwise `setAndAllowWhileIdle`. The 30-min lead absorbs Doze delays, so the app works without the exact-alarm grant. Alarms go to `SkyAlertReceiver`.
    - **Rescheduling rule:** Each sync cancels **all** pending alerts and reschedules only events whose alert time is still in the future. Event ids shift as orbit data updates, so this rule, not id matching, prevents duplicate notifications; an event that already alerted is in the past and is never rescheduled. `BootReceiver` (`BOOT_COMPLETED`) applies the same rule from Room.
 
 ---
@@ -100,7 +126,11 @@ backend has one model end to end.
     {
       "generated_at": "2026-11-15T18:00:00Z",
       "valid_until": "2026-11-16T08:00:00Z",
+      "min_supported_version_code": 1,
       "tonight": {
+        "dusk": "2026-11-15T17:21:00Z",
+        "dawn": "2026-11-16T06:52:00Z",
+        "highlight_event_id": "SATELLITE:25544:2026-11-15T21:39:15Z",
         "cloud_cover_percent": 10,
         "condition_code": "CLEAR"
       },
@@ -113,13 +143,18 @@ backend has one model end to end.
           "timing": {
             "window_start": "2026-11-15T21:39:15Z",
             "peak_time": "2026-11-15T21:42:15Z",
-            "window_end": "2026-11-15T21:45:15Z"
+            "window_end": "2026-11-15T21:45:15Z",
+            "duration_seconds": 360,
+            "notify_at": "2026-11-15T21:09:15Z",
+            "recheck_at": "2026-11-15T19:39:15Z"
           },
           "geometry": {
             "magnitude": -3.8,
             "max_elevation_deg": 74,
             "start_azimuth_deg": 270,
             "end_azimuth_deg": 45,
+            "start_direction": "W",
+            "end_direction": "NE",
             "rate_per_hour": null,
             "moon_illumination_percent": null
           },
@@ -129,9 +164,15 @@ backend has one model end to end.
       ]
     }
 
-Derived on the client, not sent: the hero card (first `is_worth_looking` event tonight, else the rest
-state from `tonight`), compass labels from azimuth degrees, duration (`window_end - window_start`), and
-`notify_at` (`window_start` minus 30 min).
+Everything is precomputed (thin-client principle, §3):
+- **Hero card:** `tonight.highlight_event_id`. If it is `null`, the app shows the rest state using the `tonight` weather.
+- **Directions:** 16-point compass codes (`N`, `NNE`, … `NW`, `NNW`). Degrees are kept for the v2 sky compass.
+- **Alert timing:** `notify_at` and `recheck_at`. Both are `null` for events that are not `is_worth_looking`.
+
+**Version control:** `min_supported_version_code` is the lowest Android `versionCode` the API still
+serves correctly. If the app's `versionCode` is lower, it blocks with a forced update using the
+Google Play In-App Updates API (`IMMEDIATE`). Ordinary "update available" prompts use the same API in
+`FLEXIBLE` mode and need nothing from the server.
 
 Event `id`s are unique within one response but **not stable across syncs** (orbit updates shift pass times by seconds). Clients must not rely on them across syncs (see the rescheduling rule in §3).
 
@@ -165,28 +206,11 @@ Event `id`s are unique within one response but **not stable across syncs** (orbi
 
 ## 9. Open Questions
 
-### Do we need the backend at all?
-Since the data sources were reconciled, every input is either computed locally or available from a
-free public API that can be called from the device:
-
-- **Moon, planets, eclipses:** Astronomy Engine has a Kotlin port and runs offline on the device.
-- **Satellites:** CelesTrak orbit data (one small fetch per day) plus SGP4 propagation on the device.
-- **Weather:** Open-Meteo (or MET Norway), queried with rounded coordinates.
-- **Meteor showers:** a static table shipped in the app.
-
-**Option A: keep the backend.** It caches CelesTrak and weather requests for all users, can change
-the evaluation logic without an app release, and keeps the client thin.
-
-**Option B: on-device only.** No server to host, pay for or keep running, so cost really is zero.
-Coordinates never reach our infrastructure, and the app works fully offline once the day's data has
-been fetched. Downsides: changing the evaluation logic needs an app release, each device hits
-CelesTrak and Open-Meteo directly (still well within their limits at portfolio scale), and the
-backend stops being part of the portfolio.
-
-To decide: is the backend there for the product, or because we want to build a backend?
-
 ### Is the module structure too heavy for the MVP?
 §4 sets out five `core/` modules plus data/domain/presentation layers per feature, for one screen and a
 settings page. The alternative is one Gradle module with the same package layout, split into modules
 later when build times or boundaries call for it. The trade-off is learning value (the stated purpose
 of the project) against setup and maintenance overhead.
+
+With the thin-client principle (§3), the `domain/` layer and its use cases would contain almost no
+logic, which strengthens the case for the single module.
