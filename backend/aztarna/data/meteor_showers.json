@@ -1,0 +1,15 @@
+{
+  "_comment": "Major showers from the IMO Working List (https://www.imo.net/resources/calendar/). Update yearly by hand. Dates are MM-DD; peak is the usual UTC date (drifts up to 1 day between years). radiant_ra/dec in degrees (J2000).",
+  "showers": [
+    {"code": "QUADRANTIDS", "active_start": "12-28", "active_end": "01-12", "peak": "01-03", "zhr": 80, "radiant_ra": 230, "radiant_dec": 49},
+    {"code": "LYRIDS", "active_start": "04-14", "active_end": "04-30", "peak": "04-22", "zhr": 18, "radiant_ra": 271, "radiant_dec": 34},
+    {"code": "ETA_AQUARIIDS", "active_start": "04-19", "active_end": "05-28", "peak": "05-06", "zhr": 50, "radiant_ra": 338, "radiant_dec": -1},
+    {"code": "SOUTHERN_DELTA_AQUARIIDS", "active_start": "07-12", "active_end": "08-23", "peak": "07-31", "zhr": 25, "radiant_ra": 340, "radiant_dec": -16},
+    {"code": "PERSEIDS", "active_start": "07-17", "active_end": "08-24", "peak": "08-12", "zhr": 100, "radiant_ra": 48, "radiant_dec": 58},
+    {"code": "DRACONIDS", "active_start": "10-06", "active_end": "10-10", "peak": "10-08", "zhr": 10, "radiant_ra": 262, "radiant_dec": 54},
+    {"code": "ORIONIDS", "active_start": "10-02", "active_end": "11-07", "peak": "10-21", "zhr": 20, "radiant_ra": 95, "radiant_dec": 16},
+    {"code": "LEONIDS", "active_start": "11-06", "active_end": "11-30", "peak": "11-17", "zhr": 15, "radiant_ra": 152, "radiant_dec": 22},
+    {"code": "GEMINIDS", "active_start": "12-04", "active_end": "12-20", "peak": "12-14", "zhr": 150, "radiant_ra": 112, "radiant_dec": 33},
+    {"code": "URSIDS", "active_start": "12-17", "active_end": "12-26", "peak": "12-22", "zhr": 10, "radiant_ra": 217, "radiant_dec": 76}
+  ]
+}

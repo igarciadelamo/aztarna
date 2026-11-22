@@ -32,6 +32,7 @@ class Geometry(BaseModel):
     end_direction: str | None = None
     rate_per_hour: float | None = None
     moon_illumination_percent: float | None = None
+    moon_elevation_deg: float | None = None
 
 
 class Weather(BaseModel):

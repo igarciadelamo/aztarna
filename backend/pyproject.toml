@@ -5,6 +5,7 @@ description = "Aztarna sky forecast API"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.165.0",
+    "skyfield>=1.55",
     "uvicorn>=0.54.0",
 ]
 

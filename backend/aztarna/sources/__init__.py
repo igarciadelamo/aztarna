@@ -15,5 +15,9 @@ class EventSource(Protocol):
         ...
 
 
+from aztarna.sources.meteors import MeteorSource
+from aztarna.sources.satellites import SatelliteSource
+from aztarna.sources.sky import SkySource
+
 # Add new sources here; order does not matter, the pipeline sorts by time.
-SOURCES: list[EventSource] = []
+SOURCES: list[EventSource] = [SkySource(), SatelliteSource(), MeteorSource()]

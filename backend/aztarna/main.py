@@ -10,11 +10,13 @@ from aztarna import db
 from aztarna.forecast import build_forecast
 from aztarna.models import AppVersionResponse, ForecastResponse, UpdateAction
 from aztarna.sources import SOURCES
+from aztarna.sources.satellites import refresh_tle, tle_path
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     db.connect().close()  # Create the DB and schema at boot; fail fast if DATA_DIR isn't writable.
+    refresh_tle(tle_path())  # Warm the TLE file so the first request doesn't wait on CelesTrak.
     yield
 
 

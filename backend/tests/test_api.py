@@ -41,7 +41,10 @@ def test_sky_forecast_invalid(params):
 def test_sky_forecast_ok():
     r = client.get("/v1/sky-forecast", params={"lat": 40.4, "lon": -3.7})
     assert r.status_code == 200
-    assert r.json()["events"] == []
+    # Network is off in tests: weather is unknown, so nothing can be recommended.
+    for e in r.json()["events"]:
+        assert e["evaluation"]["is_worth_looking"] is False
+        assert e["timing"]["notify_at"] is None
 
 
 def event(minutes: int) -> NormalizedSkyEvent:
@@ -52,7 +55,7 @@ def event(minutes: int) -> NormalizedSkyEvent:
         target="ISS",
         source="TEST",
         timing=Timing(window_start=start, peak_time=start, window_end=start, duration_seconds=0),
-        geometry=Geometry(),
+        geometry=Geometry(magnitude=-3, max_elevation_deg=60),
     )
 
 
@@ -77,3 +80,10 @@ def test_forecast_merges_sorts_and_survives_failing_source():
         NOW + timedelta(minutes=30),
     ]
     assert forecast.valid_until == NOW + timedelta(hours=12)
+
+
+def test_forecast_drops_geometry_failures_keeps_weather_failures():
+    low = event(5)
+    low.geometry.max_elevation_deg = 15  # TOO_LOW: no forecast can fix it
+    forecast = build_forecast(40.4, -3.7, [FixedSource(low, event(10))], now=NOW)
+    assert [e.evaluation.reason_code for e in forecast.events] == ["WEATHER_UNKNOWN"]

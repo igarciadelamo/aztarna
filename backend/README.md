@@ -13,12 +13,12 @@ Lightweight stateless REST API (`GET /v1/sky-forecast`) in **Python (FastAPI + S
 ### Tooling: uv
 - The project is managed with [uv](https://github.com/astral-sh/uv) (Astral, actively maintained).
 - `pyproject.toml` and `uv.lock` are committed. `.python-version` pins Python 3.13.
-- Runtime dependencies: `fastapi`, `uvicorn` (`skyfield` and `httpx` get added with the first sources).
+- Runtime dependencies: `fastapi`, `uvicorn`, `skyfield`. HTTP calls (CelesTrak, Open-Meteo) use the stdlib `urllib`.
 - Dev dependencies (`uv add --dev`): `pytest`, `ruff`, `httpx2`, `pre-commit`.
 
 | Task | Command |
 |---|---|
-| Install deps + git pre-commit hook | `make setup` (needs uv: `brew install uv`) |
+| Install deps, ephemeris + git pre-commit hook | `make setup` (needs uv: `brew install uv`) |
 | Run locally (http://127.0.0.1:8000/docs) | `make run` |
 | Test | `make test` |
 | Lint / format check | `make lint` |
@@ -47,19 +47,21 @@ No other routes are planned.
     ├── pyproject.toml, uv.lock, .python-version
     ├── Dockerfile, .dockerignore
     ├── aztarna/
-    │   ├── main.py          # FastAPI app, all routes, startup (DB init; later the TLE refresh loop)
+    │   ├── main.py          # FastAPI app, all routes, startup (DB init, TLE warm-up)
     │   ├── db.py            # SQLite connection + schema
     │   ├── models.py        # Pydantic: ForecastResponse, NormalizedSkyEvent
-    │   ├── forecast.py      # Orchestration: sources → events → evaluation → response
+    │   ├── forecast.py      # Orchestration: sources → weather → evaluation → timing → tonight
     │   ├── evaluation.py    # Worth-looking thresholds (PRODUCT.md §2)
+    │   ├── weather.py       # Open-Meteo + in-memory TTL cache (enrichment, not an event source)
+    │   ├── astro.py         # Shared Skyfield helpers: ephemeris, nights, best view, compass codes
     │   ├── sources/
     │   │   ├── __init__.py    # EventSource interface + SOURCES registry
-    │   │   ├── satellites.py  # CelesTrak fetch + Skyfield passes
-    │   │   ├── sky.py         # Moon, planets, lunar eclipses, dusk/dawn (Skyfield)
-    │   │   ├── meteors.py     # Reads the static shower table
-    │   │   └── weather.py     # Open-Meteo + in-memory TTL cache
+    │   │   ├── satellites.py  # CelesTrak fetch + Skyfield SGP4 passes (ISS, Tiangong)
+    │   │   ├── sky.py         # Full/super moons, oppositions, conjunctions, lunar eclipses
+    │   │   └── meteors.py     # Static shower table, evaluated for the peak night
     │   └── data/
-    │       └── meteor_showers.json
+    │       ├── meteor_showers.json
+    │       └── de421.bsp      # git-ignored; downloaded by `make setup` / Docker build
     └── tests/
 
 There is one file per data source, and nothing more until a file actually grows too large.
@@ -76,8 +78,17 @@ To add a backend (Skyfield, the static shower table, a future library or API), i
 and append an instance to `SOURCES`. The pipeline (`forecast.py`) merges all sources and sorts them
 by time. If a source raises, only that source's events are dropped, never the whole response.
 
-**Status:** the interface and pipeline are in place, but `SOURCES` is still empty. Weather,
-evaluation and `tonight` arrive with the first sources.
+**Registered sources:** `SkySource`, `SatelliteSource`, `MeteorSource`. Tests in
+`tests/test_sources.py` check them against published facts (eclipse times, opposition dates, moon
+phase at meteor peaks) and run offline: `tests/conftest.py` blocks network access, and satellites
+use a fixture TLE.
+
+**Known simplifications** (marked `ponytail:` in the code):
+- Meteor peaks use a fixed calendar date (±1 day).
+- Satellite brightness uses a diffuse-sphere model (±1 mag).
+- Eclipse partial-phase length assumes a constant Moon speed (a few minutes off).
+- Best viewing time is sampled every 10 minutes.
+- Polar night (Sun never above −6°) yields no night-based events.
 
 ### State (the service is stateless per request, but not per process)
 - **SQLite** (`aztarna/db.py`): `$DATA_DIR/aztarna.db`, created along with its schema at startup.
@@ -85,9 +96,10 @@ evaluation and `tonight` arrive with the first sources.
   `CREATE TABLE IF NOT EXISTS` statements to `SCHEMA` when we need to store something. **Never**
   store coordinates, IPs or anything else per request (privacy rule). Locally it lives in
   `backend/data/` (git-ignored); in Docker it lives on the `/data` volume.
-- **TLE file:** stored at `/data/tle.txt` on a Docker volume, so a container restart does not
-  refetch it and risk a CelesTrak IP block. It is refreshed at startup if older than 24 h, then daily by
-  an in-process loop.
+- **TLE file:** `$DATA_DIR/stations.tle` (Docker volume), so a container restart does not refetch it
+  and risk a CelesTrak IP block. It is refreshed at startup and on request when older than 24 h. A
+  failed fetch keeps the old file and is retried at most hourly. Orbit data older than 7 days yields no
+  satellite events.
 - **Weather cache:** an in-memory dict keyed by rounded coordinates, with a TTL. It holds no other
   user data.
   This is a per-process cache, so it only works with a single worker and a single instance. Move it

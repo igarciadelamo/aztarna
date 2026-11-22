@@ -157,15 +157,17 @@ backend has one model end to end.
             "start_direction": "W",
             "end_direction": "NE",
             "rate_per_hour": null,
-            "moon_illumination_percent": null
+            "moon_illumination_percent": null,
+            "moon_elevation_deg": null
           },
           "weather": { "cloud_cover_percent": 10, "condition_code": "CLEAR" },
-          "evaluation": { "is_worth_looking": true, "reason_code": "BRIGHT_HIGH_CLEAR" }
+          "evaluation": { "is_worth_looking": true, "reason_code": "GOOD_CONDITIONS" }
         }
       ]
     }
 
 Everything is precomputed (thin-client principle, §3):
+- **Only events that weather could make worth looking are returned.** Events that fail on geometry (`TOO_LOW`, `TOO_FAINT`, `MOON_GLARE`) are dropped, so every `reason_code` the app sees is `GOOD_CONDITIONS`, `TOO_CLOUDY` or `WEATHER_UNKNOWN`.
 - **Hero card:** `tonight.highlight_event_id`. If it is `null`, the app shows the rest state using the `tonight` weather.
 - **Directions:** 16-point compass codes (`N`, `NNE`, … `NW`, `NNW`). Degrees are kept for the v2 sky compass.
 - **Alert timing:** `notify_at` and `recheck_at`. Both are `null` for events that are not `is_worth_looking`.
@@ -205,7 +207,7 @@ force or suggest updates without shipping code.
 ## 6. Local Database (Room) & UI State (Compose)
 
 - **Room Entities:**
-  - `CelestialEventEntity`: Flattened `NormalizedSkyEvent` (`id`, `category`, `target`, `windowStart`, `peakTime`, `windowEnd`, `magnitude`, `maxElevationDeg`, `startAzimuthDeg`, `endAzimuthDeg`, `ratePerHour`, `moonIlluminationPercent`, `cloudCoverPercent`, `conditionCode`, `isWorthLooking`, `reasonCode`).
+  - `CelestialEventEntity`: Flattened `NormalizedSkyEvent` (`id`, `category`, `target`, `windowStart`, `peakTime`, `windowEnd`, `magnitude`, `maxElevationDeg`, `startAzimuthDeg`, `endAzimuthDeg`, `ratePerHour`, `moonIlluminationPercent`, `moonElevationDeg`, `cloudCoverPercent`, `conditionCode`, `isWorthLooking`, `reasonCode`).
   - `ForecastCacheEntity`: Single-row table storing forecast metadata (`generatedAt`, `validUntil`, `tonightCloudCoverPercent`, `tonightConditionCode`).
 - **UI State (`HomeUiState`):** Sealed interface following Unidirectional Data Flow (`Loading`, `Success`, `Error` with cached data fallback).
 

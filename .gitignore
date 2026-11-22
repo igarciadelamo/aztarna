@@ -31,3 +31,6 @@ __pycache__/
 
 # Backend local SQLite (DATA_DIR default)
 backend/data/
+
+# Skyfield ephemeris (downloaded by make setup / Docker build)
+backend/aztarna/data/*.bsp

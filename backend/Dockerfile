@@ -5,6 +5,7 @@ ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
 COPY pyproject.toml uv.lock .python-version ./
 RUN uv sync --locked --no-dev --no-install-project
 COPY aztarna ./aztarna
+RUN .venv/bin/python -c "from aztarna.astro import eph; eph()"
 
 FROM python:3.13-slim
 RUN useradd --create-home --uid 1000 app && mkdir /data && chown app /data

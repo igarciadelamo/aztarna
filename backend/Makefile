@@ -3,6 +3,7 @@
 setup:
 	@command -v uv >/dev/null || { echo "uv not found: brew install uv (or see https://docs.astral.sh/uv/)"; exit 1; }
 	uv sync
+	uv run python -c "from aztarna.astro import eph; eph()"  # DE421 ephemeris, ~17 MB, once
 	uv run pre-commit install
 
 run:
