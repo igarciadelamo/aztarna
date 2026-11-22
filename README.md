@@ -12,6 +12,20 @@ Monorepo with two projects:
 - [`android/`](android/) — Kotlin + Jetpack Compose client, offline-first.
 - [`backend/`](backend/) — stateless REST API for sky forecasts.
 
+## Quick Start (backend)
+
+```
+cd backend
+make setup   # needs uv: brew install uv
+make run
+```
+
+Then open the **dev console at http://127.0.0.1:8000/dev**: search a place by name (or use your
+location, or type coordinates) and see tonight's summary and every event the API returns, with
+weather, verdict, alert times and tips. API docs are at `/docs`.
+
 ## Status
 
-Repository just initialized. No code yet.
+- **Backend:** working. Sky, satellite and meteor sources, weather evaluation, app-version gate,
+  CI. See [`backend/README.md`](backend/README.md).
+- **Android:** not started.

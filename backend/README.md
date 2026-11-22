@@ -3,6 +3,20 @@
 Lightweight stateless REST API (`GET /v1/sky-forecast`) in **Python (FastAPI + Skyfield)**. See
 [`../PRODUCT.md`](../PRODUCT.md) for the API contract, the thin-client principle and privacy rules.
 
+## Quick Start
+
+```
+make setup   # deps, ephemeris, git pre-commit hook (needs uv: brew install uv)
+make run     # API on http://127.0.0.1:8000
+```
+
+**Dev console: http://127.0.0.1:8000/dev.** A plain web page for manually testing the API:
+- **Location:** search a place by name, use your browser location, or type lat/lon.
+- **Results:** tonight's summary and a table of every event (times in your time zone, geometry,
+  weather, verdict, alert times, tips), plus `/health` and the raw JSON.
+- **Availability:** it exists only under `make run` (`AZTARNA_DEV_UI=1`). Docker and production
+  return 404 for `/dev`.
+
 ## Documentation
 
 - [`docs/data-pipeline-and-sources.md`](docs/data-pipeline-and-sources.md) — external data sources,
