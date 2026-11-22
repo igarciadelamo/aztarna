@@ -1,0 +1,19 @@
+"""Event sources: every calculation backend (Skyfield, a static table, a future library) implements
+EventSource and is registered in SOURCES. The forecast pipeline only knows this interface."""
+
+from datetime import datetime
+from typing import Protocol
+
+from aztarna.models import NormalizedSkyEvent
+
+
+class EventSource(Protocol):
+    def events(
+        self, lat: float, lon: float, start: datetime, end: datetime
+    ) -> list[NormalizedSkyEvent]:
+        """Events visible from (lat, lon) whose window overlaps [start, end). UTC datetimes."""
+        ...
+
+
+# Add new sources here; order does not matter, the pipeline sorts by time.
+SOURCES: list[EventSource] = []

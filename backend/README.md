@@ -8,20 +8,27 @@ Lightweight stateless REST API (`GET /v1/sky-forecast`) in **Python (FastAPI + S
 - [`docs/data-pipeline-and-sources.md`](docs/data-pipeline-and-sources.md) — external data sources,
   rate limits, fallback behavior and the canonical `NormalizedSkyEvent` format.
 
-## Setup Plan (no code yet)
+## Setup
 
 ### Tooling: uv
 - The project is managed with [uv](https://github.com/astral-sh/uv) (Astral, actively maintained).
 - `pyproject.toml` and `uv.lock` are committed. `.python-version` pins Python 3.13.
-- Runtime dependencies: `fastapi`, `uvicorn`, `skyfield`, `httpx`.
-- Dev dependencies (`uv add --dev`): `pytest`, `ruff`.
+- Runtime dependencies: `fastapi`, `uvicorn` (`skyfield` and `httpx` get added with the first sources).
+- Dev dependencies (`uv add --dev`): `pytest`, `ruff`, `httpx2`, `pre-commit`.
 
 | Task | Command |
 |---|---|
-| Install | `uv sync` |
-| Run locally | `uv run uvicorn aztarna.main:app --reload` |
-| Test | `uv run pytest` |
-| Lint / format | `uv run ruff check` / `uv run ruff format` |
+| Install deps + git pre-commit hook | `make setup` (needs uv: `brew install uv`) |
+| Run locally (http://127.0.0.1:8000/docs) | `make run` |
+| Test | `make test` |
+| Lint / format check | `make lint` |
+| Auto-fix lint + format | `make format` |
+| Build and run the Docker image | `make docker` |
+
+**Pre-commit hook** (`.pre-commit-config.yaml` at the repo root, installed by `make setup`): on each
+commit that touches `backend/`, it runs `ruff check --fix`, `ruff format` and `pytest`. If a hook
+changes files, the commit stops; review the changes, `git add` them and commit again. The tools run
+from `backend/uv.lock`, so their versions match `make lint`.
 
 ### Routes
 
@@ -40,11 +47,13 @@ No other routes are planned.
     ├── pyproject.toml, uv.lock, .python-version
     ├── Dockerfile, .dockerignore
     ├── aztarna/
-    │   ├── main.py          # FastAPI app, all routes, startup (TLE refresh loop)
+    │   ├── main.py          # FastAPI app, all routes, startup (DB init; later the TLE refresh loop)
+    │   ├── db.py            # SQLite connection + schema
     │   ├── models.py        # Pydantic: ForecastResponse, NormalizedSkyEvent
     │   ├── forecast.py      # Orchestration: sources → events → evaluation → response
     │   ├── evaluation.py    # Worth-looking thresholds (PRODUCT.md §2)
     │   ├── sources/
+    │   │   ├── __init__.py    # EventSource interface + SOURCES registry
     │   │   ├── satellites.py  # CelesTrak fetch + Skyfield passes
     │   │   ├── sky.py         # Moon, planets, lunar eclipses, dusk/dawn (Skyfield)
     │   │   ├── meteors.py     # Reads the static shower table
@@ -55,7 +64,27 @@ No other routes are planned.
 
 There is one file per data source, and nothing more until a file actually grows too large.
 
+### Event Sources (calculation abstraction)
+Every calculation backend implements one interface (`aztarna/sources/__init__.py`):
+
+```python
+class EventSource(Protocol):
+    def events(self, lat, lon, start, end) -> list[NormalizedSkyEvent]: ...
+```
+
+To add a backend (Skyfield, the static shower table, a future library or API), implement `events()`
+and append an instance to `SOURCES`. The pipeline (`forecast.py`) merges all sources and sorts them
+by time. If a source raises, only that source's events are dropped, never the whole response.
+
+**Status:** the interface and pipeline are in place, but `SOURCES` is still empty. Weather,
+evaluation and `tonight` arrive with the first sources.
+
 ### State (the service is stateless per request, but not per process)
+- **SQLite** (`aztarna/db.py`): `$DATA_DIR/aztarna.db`, created along with its schema at startup.
+  It uses the stdlib `sqlite3` module (no ORM) in WAL mode. It has no tables yet: add idempotent
+  `CREATE TABLE IF NOT EXISTS` statements to `SCHEMA` when we need to store something. **Never**
+  store coordinates, IPs or anything else per request (privacy rule). Locally it lives in
+  `backend/data/` (git-ignored); in Docker it lives on the `/data` volume.
 - **TLE file:** stored at `/data/tle.txt` on a Docker volume, so a container restart does not
   refetch it and risk a CelesTrak IP block. It is refreshed at startup if older than 24 h, then daily by
   an in-process loop.
@@ -72,20 +101,19 @@ There is one file per data source, and nothing more until a file actually grows 
 |---|---|---|
 | `MIN_VERSION_CODE` | `1` | Lowest app `versionCode` allowed; anything older gets `FORCE_UPDATE`. |
 | `LATEST_VERSION_CODE` | `1` | Newest published `versionCode`; anything older gets `SUGGEST_UPDATE`. Bump it after each Play release. |
-| `DATA_DIR` | `/data` | Location of the TLE file. |
+| `DATA_DIR` | `data` locally, `/data` in Docker | Location of the SQLite DB and the TLE file. |
 
 ### Docker
 A single image built from a multi-stage `Dockerfile`:
-1. **Build stage:** `python:3.13-slim`, with the uv binary copied from `ghcr.io/astral-sh/uv:<pinned version>`.
-   It runs `uv sync --locked --no-dev` and downloads `de421.bsp`.
-2. **Runtime stage:** `python:3.13-slim` with only `.venv`, the code and the ephemeris. Runs as a
+1. **Build stage:** `python:3.13-slim`, with the uv binary copied from `ghcr.io/astral-sh/uv:0.13.9`.
+   It runs `uv sync --locked --no-dev` (and will download `de421.bsp` once Skyfield lands).
+2. **Runtime stage:** `python:3.13-slim` with only `.venv` and the code. Runs as a
    non-root user, exposes port `8000`, and has a `HEALTHCHECK` on `/health`.
 3. **Command:** `uvicorn aztarna.main:app --host 0.0.0.0 --port 8000 --no-access-log`.
    `--no-access-log` enforces the privacy rule that no IP logs are kept (`PRODUCT.md` §3).
 
 ```
-docker build -t aztarna-backend backend/
-docker run -p 8000:8000 -v aztarna-data:/data aztarna-backend
+make docker   # = docker build -t aztarna-backend . && docker run --rm -p 8000:8000 -v aztarna-data:/data aztarna-backend
 ```
 
 There is no `compose.yaml`: it is a single service with one volume, so `docker run` covers it. Add

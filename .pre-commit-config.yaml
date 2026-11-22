@@ -1,0 +1,23 @@
+# Installed by `make setup` in backend/. Hooks use the backend's uv environment, so tool versions
+# come from backend/uv.lock (no second version pin here).
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check --fix (backend)
+        entry: uv run --project backend ruff check --fix
+        language: system
+        types: [python]
+        files: ^backend/
+      - id: ruff-format
+        name: ruff format (backend)
+        entry: uv run --project backend ruff format
+        language: system
+        types: [python]
+        files: ^backend/
+      - id: pytest
+        name: pytest (backend)
+        entry: make -C backend test
+        language: system
+        files: ^backend/
+        pass_filenames: false
