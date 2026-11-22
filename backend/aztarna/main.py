@@ -6,10 +6,11 @@ from fastapi import FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from aztarna import weather
 from aztarna.forecast import build_forecast
 from aztarna.models import AppVersionResponse, ForecastResponse, UpdateAction
 from aztarna.sources import SOURCES
-from aztarna.sources.satellites import refresh_tle, tle_path
+from aztarna.sources.satellites import refresh_tle, tle_age_hours, tle_path
 
 
 @asynccontextmanager
@@ -33,9 +34,21 @@ async def bad_request(request: Request, _: RequestValidationError) -> JSONRespon
     )
 
 
+TLE_STALE_HOURS = 48  # daily refresh failing for 2 days: satellite events will soon disappear
+
+
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok"}
+    """Always 200 while the process serves requests. `status: degraded` is for the uptime monitor
+    (keyword alert): CelesTrak refresh failing, or the weather budget spent this hour."""
+    age = tle_age_hours()
+    budget = weather.budget_left()
+    degraded = age is None or age > TLE_STALE_HOURS or budget == 0
+    return {
+        "status": "degraded" if degraded else "ok",
+        "tle_age_hours": age,
+        "weather_budget_left": budget,
+    }
 
 
 @app.get("/v1/app-version")

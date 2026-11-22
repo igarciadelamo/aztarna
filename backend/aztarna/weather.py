@@ -3,6 +3,7 @@
 
 import json
 import logging
+import threading
 import time
 import urllib.parse
 import urllib.request
@@ -17,6 +18,30 @@ TTL_S = 3600
 # ponytail: per-process dict, one worker/instance only; Redis if we scale out. Keys are rounded
 # coordinates (~11 km), never stored anywhere else.
 _cache: dict[tuple[float, float], tuple[float, dict[datetime, int]]] = {}
+
+# Global cap on upstream calls, so one client cycling through coordinates can't exhaust the free
+# tier (5,000/h, 10,000/day) for everyone. 300/h = 7,200/day worst case. No per-IP state needed.
+MAX_FETCHES_PER_HOUR = 300
+_budget_lock = threading.Lock()
+_budget = {"hour_start": 0.0, "used": 0}
+
+
+def _take_budget() -> bool:
+    with _budget_lock:
+        now = time.time()
+        if now - _budget["hour_start"] >= 3600:
+            _budget.update(hour_start=now, used=0)
+        if _budget["used"] >= MAX_FETCHES_PER_HOUR:
+            return False
+        _budget["used"] += 1
+        return True
+
+
+def budget_left() -> int:
+    with _budget_lock:
+        if time.time() - _budget["hour_start"] >= 3600:
+            return MAX_FETCHES_PER_HOUR
+        return MAX_FETCHES_PER_HOUR - _budget["used"]
 
 
 def fetch(lat: float, lon: float) -> dict[datetime, int]:
@@ -39,11 +64,15 @@ def fetch(lat: float, lon: float) -> dict[datetime, int]:
 
 
 def hourly_cloud_cover(lat: float, lon: float) -> dict[datetime, int]:
-    """Fresh cache → it; else fetch; on failure → stale cache, else {} (unknown, never 'clear')."""
+    """Fresh cache → it; else fetch; on failure or spent budget → stale cache, else {} (unknown,
+    never 'clear')."""
     key = (lat, lon)
     cached = _cache.get(key)
     if cached and time.time() - cached[0] < TTL_S:
         return cached[1]
+    if not _take_budget():
+        log.warning("Open-Meteo hourly budget spent; serving cached/unknown weather")
+        return cached[1] if cached else {}
     try:
         data = fetch(lat, lon)
         _cache[key] = (time.time(), data)

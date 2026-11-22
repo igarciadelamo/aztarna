@@ -14,4 +14,5 @@ def no_network(monkeypatch, tmp_path):
     monkeypatch.setenv("DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setattr(weather, "fetch", offline)
     monkeypatch.setattr(weather, "_cache", {})
+    monkeypatch.setattr(weather, "_budget", {"hour_start": 0.0, "used": 0})
     monkeypatch.setattr(satellites, "refresh_tle", lambda path: None)

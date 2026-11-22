@@ -19,8 +19,9 @@ from aztarna.models import Category, Geometry, NormalizedSkyEvent, Timing
 log = logging.getLogger(__name__)
 
 TLE_URL = "https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=TLE"
-# NORAD id -> (target, standard magnitude at 1000 km and 90° phase angle)
-TRACKED = {25544: ("ISS", -1.8), 48274: ("TIANGONG", -0.9)}
+# NORAD id -> (target, standard magnitude at 1000 km and 90° phase angle). Fitted to Heavens-Above
+# (27 passes over Madrid, 2026-11-22); refit if a station's configuration changes a lot.
+TRACKED = {25544: ("ISS", -1.9), 48274: ("TIANGONG", -0.2)}
 REFRESH_S = 24 * 3600  # CelesTrak asks for at most a few downloads a day
 RETRY_S = 3600  # after a failed fetch, don't retry on every request
 MAX_TLE_AGE = timedelta(days=7)  # older than this, pass times are unreliable: emit nothing
@@ -59,6 +60,12 @@ def refresh_tle(path: Path) -> None:
             log.exception("CelesTrak fetch failed; keeping previous TLE file")
 
 
+def tle_age_hours() -> float | None:
+    """Hours since the last successful CelesTrak download; None if we never got one."""
+    path = tle_path()
+    return round((time.time() - path.stat().st_mtime) / 3600, 1) if path.exists() else None
+
+
 def read_tle() -> str:
     path = tle_path()
     refresh_tle(path)
@@ -66,10 +73,10 @@ def read_tle() -> str:
 
 
 def magnitude(std_mag: float, range_km: float, phase_rad: float) -> float:
-    """Diffuse-sphere model. ponytail: ±1 mag for big flat panels (ISS); use McCants qs.mag
-    intrinsic values + flare models if accuracy matters."""
-    f = max(np.sin(phase_rad) + (np.pi - phase_rad) * np.cos(phase_rad), 1e-6)  # f(90°) = 1
-    return round(float(std_mag + 5 * np.log10(range_km / 1000) - 2.5 * np.log10(f)), 1)
+    """QuickSat/McCants model: scale by range and illuminated fraction (1 + cos φ) / 2, normalized
+    to 0.5 at 90°. Matches Heavens-Above within ~0.3 mag (max 0.6); no flare modeling."""
+    fraction = max((1 + np.cos(phase_rad)) / 2, 1e-6)
+    return round(float(std_mag + 5 * np.log10(range_km / 1000) - 2.5 * np.log10(2 * fraction)), 1)
 
 
 class SatelliteSource:

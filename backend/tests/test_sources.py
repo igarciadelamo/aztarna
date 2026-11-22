@@ -87,6 +87,32 @@ def test_satellite_passes_are_visible_and_consistent():
         assert -5 < e.geometry.magnitude < 4
 
 
+# Heavens-Above, 40.4N 3.7W, same TLE epoch (2026-11-22): (target, start UTC, max alt, magnitude)
+HEAVENS_ABOVE = [
+    ("ISS", utc(2026, 11, 23, 17, 38, 27), 12, -1.4),
+    ("ISS", utc(2026, 11, 28, 18, 27, 51), 78, -4.0),
+    ("ISS", utc(2026, 11, 29, 17, 39, 49), 46, -3.4),
+    ("ISS", utc(2026, 11, 29, 19, 17, 6), 19, -1.1),
+    ("TIANGONG", utc(2026, 11, 24, 5, 47, 2), 81, -2.2),
+    ("TIANGONG", utc(2026, 11, 25, 4, 50, 26), 21, 0.5),
+    ("TIANGONG", utc(2026, 11, 30, 4, 43, 11), 15, 1.1),
+    ("TIANGONG", utc(2026, 12, 1, 5, 18, 34), 37, -0.8),
+]
+
+
+def test_satellite_passes_match_heavens_above():
+    tle = (Path(__file__).parent / "stations.tle").read_text()
+    events = SatelliteSource(read=lambda: tle).events(*MADRID, utc(2026, 11, 22), utc(2026, 12, 2))
+    for target, start, alt, mag in HEAVENS_ABOVE:
+        e = min(
+            (e for e in events if e.target == target),
+            key=lambda e: abs(e.timing.window_start - start),
+        )
+        assert abs(e.timing.window_start - start) < timedelta(seconds=30), (target, start)
+        assert abs(e.geometry.max_elevation_deg - alt) < 3, (target, start)
+        assert abs(e.geometry.magnitude - mag) < 0.7, (target, start, e.geometry.magnitude)
+
+
 def test_stale_tle_emits_nothing():
     tle = (Path(__file__).parent / "stations.tle").read_text()
     assert SatelliteSource(read=lambda: tle).events(*MADRID, utc(2027, 1, 1), utc(2027, 1, 2)) == []
@@ -168,3 +194,17 @@ def event(category, cloud=10, **geometry):
 )
 def test_evaluation(e, reason):
     assert evaluate(e).reason_code == reason
+
+
+def test_weather_budget_caps_upstream_calls(monkeypatch):
+    calls = []
+    monkeypatch.setattr(weather, "MAX_FETCHES_PER_HOUR", 2)
+    monkeypatch.setattr(
+        weather, "fetch", lambda lat, lon: calls.append(lat) or {utc(2026, 1, 1): 5}
+    )
+    for lat in (1.0, 2.0, 3.0, 4.0):
+        weather.hourly_cloud_cover(lat, 0.0)
+    assert calls == [1.0, 2.0]
+    assert weather.hourly_cloud_cover(1.0, 0.0) == {utc(2026, 1, 1): 5}  # cache still served
+    assert weather.hourly_cloud_cover(5.0, 0.0) == {}  # over budget: unknown, never "clear"
+    assert weather.budget_left() == 0

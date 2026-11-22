@@ -6,13 +6,21 @@ from fastapi.testclient import TestClient
 from aztarna.forecast import build_forecast
 from aztarna.main import app
 from aztarna.models import Category, Geometry, NormalizedSkyEvent, Timing
+from aztarna.sources import satellites
 
 client = TestClient(app)
 NOW = datetime(2026, 11, 15, 18, tzinfo=UTC)
 
 
-def test_health():
-    assert client.get("/health").json() == {"status": "ok"}
+def test_health_degraded_without_tle():
+    body = client.get("/health").json()
+    assert body == {"status": "degraded", "tle_age_hours": None, "weather_budget_left": 300}
+
+
+def test_health_ok_with_fresh_tle():
+    satellites.tle_path().parent.mkdir(parents=True)
+    satellites.tle_path().write_text("x")
+    assert client.get("/health").json()["status"] == "ok"
 
 
 @pytest.mark.parametrize(

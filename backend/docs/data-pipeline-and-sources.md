@@ -25,7 +25,7 @@ This document specifies the functional data pipeline for **Aztarna** in English,
   - Fetch once per day, validate non-empty response and expected objects (such as `25544`), and atomically replace the stored file only after validation succeeds.
   - If the fetch fails, keep the previous valid file. If orbital data becomes too stale to predict accurate passes, omit satellite pass events rather than reporting inaccurate pass times.
 - **Propagation:** Skyfield `EarthSatellite` (wraps `python-sgp4`): `find_events()` for rise/culminate/set and `is_sunlit()` for illumination. A pass counts as visible only when the satellite is sunlit, the observer is in darkness (Sun below -6°), and the elevation is ≥10°.
-- **Brightness:** CelesTrak does not provide magnitude. MVP: hardcode the standard magnitude per tracked object (ISS ≈ -1.8, Tiangong ≈ -0.9 at 1000 km, 90% lit) and scale it by range and phase angle. Mike McCants' `qs.mag` intrinsic-magnitude list is the upgrade path if the satellite list grows.
+- **Brightness:** CelesTrak does not provide magnitude. We use the QuickSat/McCants model: a standard magnitude per object (at 1000 km and a 90° phase angle), scaled by range and illuminated fraction. The standard magnitudes are fitted to Heavens-Above (ISS −1.9, Tiangong −0.2; 27 passes over Madrid on 2026-11-22). The result matches Heavens-Above within about 0.3 mag (max 0.6), with times within seconds and elevations within 2°, and `tests/test_sources.py` keeps it that way. Mike McCants' `qs.mag` list is the upgrade path if the satellite list grows.
 
 ### 2.2 Local Weather & Cloud Cover — Open-Meteo
 - **Endpoint:**
