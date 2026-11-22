@@ -47,8 +47,7 @@ No other routes are planned.
     ├── pyproject.toml, uv.lock, .python-version
     ├── Dockerfile, .dockerignore
     ├── aztarna/
-    │   ├── main.py          # FastAPI app, all routes, startup (DB init, TLE warm-up)
-    │   ├── db.py            # SQLite connection + schema
+    │   ├── main.py          # FastAPI app, all routes, startup (TLE warm-up)
     │   ├── models.py        # Pydantic: ForecastResponse, NormalizedSkyEvent
     │   ├── forecast.py      # Orchestration: sources → weather → evaluation → timing → tonight
     │   ├── evaluation.py    # Worth-looking thresholds (PRODUCT.md §2)
@@ -91,11 +90,6 @@ use a fixture TLE.
 - Polar night (Sun never above −6°) yields no night-based events.
 
 ### State (the service is stateless per request, but not per process)
-- **SQLite** (`aztarna/db.py`): `$DATA_DIR/aztarna.db`, created along with its schema at startup.
-  It uses the stdlib `sqlite3` module (no ORM) in WAL mode. It has no tables yet: add idempotent
-  `CREATE TABLE IF NOT EXISTS` statements to `SCHEMA` when we need to store something. **Never**
-  store coordinates, IPs or anything else per request (privacy rule). Locally it lives in
-  `backend/data/` (git-ignored); in Docker it lives on the `/data` volume.
 - **TLE file:** `$DATA_DIR/stations.tle` (Docker volume), so a container restart does not refetch it
   and risk a CelesTrak IP block. It is refreshed at startup and on request when older than 24 h. A
   failed fetch keeps the old file and is retried at most hourly. Orbit data older than 7 days yields no
@@ -113,7 +107,7 @@ use a fixture TLE.
 |---|---|---|
 | `MIN_VERSION_CODE` | `1` | Lowest app `versionCode` allowed; anything older gets `FORCE_UPDATE`. |
 | `LATEST_VERSION_CODE` | `1` | Newest published `versionCode`; anything older gets `SUGGEST_UPDATE`. Bump it after each Play release. |
-| `DATA_DIR` | `data` locally, `/data` in Docker | Location of the SQLite DB and the TLE file. |
+| `DATA_DIR` | `data` locally, `/data` in Docker | Location of the TLE file (`backend/data/` locally, git-ignored). |
 
 ### Docker
 A single image built from a multi-stage `Dockerfile`:
