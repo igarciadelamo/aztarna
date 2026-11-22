@@ -110,7 +110,9 @@ advantage (sharing code with the app) disappears with the thin-client principle.
 
 ---
 
-## 5. Stateless API Contract (`GET /v1/sky-forecast`)
+## 5. Stateless API Contract
+
+### Sky Forecast (`GET /v1/sky-forecast`)
 
 **Request:**
 
@@ -126,7 +128,6 @@ backend has one model end to end.
     {
       "generated_at": "2026-11-15T18:00:00Z",
       "valid_until": "2026-11-16T08:00:00Z",
-      "min_supported_version_code": 1,
       "tonight": {
         "dusk": "2026-11-15T17:21:00Z",
         "dawn": "2026-11-16T06:52:00Z",
@@ -169,14 +170,35 @@ Everything is precomputed (thin-client principle, §3):
 - **Directions:** 16-point compass codes (`N`, `NNE`, … `NW`, `NNW`). Degrees are kept for the v2 sky compass.
 - **Alert timing:** `notify_at` and `recheck_at`. Both are `null` for events that are not `is_worth_looking`.
 
-**Version control:** `min_supported_version_code` is the lowest Android `versionCode` the API still
-serves correctly. If the app's `versionCode` is lower, it blocks with a forced update using the
-Google Play In-App Updates API (`IMMEDIATE`). Ordinary "update available" prompts use the same API in
-`FLEXIBLE` mode and need nothing from the server.
-
 Event `id`s are unique within one response but **not stable across syncs** (orbit updates shift pass times by seconds). Clients must not rely on them across syncs (see the rescheduling rule in §3).
 
 **Errors:** `400` with `{"error": "INVALID_COORDINATES"}` when `lat`/`lon` are missing, not numeric, or out of range. Upstream failures (weather, CelesTrak) never cause an error: the response is still `200`, with `weather: null` or the affected events omitted, as described in the pipeline doc.
+
+### App Version Check (`GET /v1/app-version`)
+
+Both version values live on the backend (environment variables, see `backend/README.md`), so we can
+force or suggest updates without shipping code.
+
+**Request:** the app sends its own Android `versionCode`.
+
+    GET /v1/app-version?version_code=5
+
+**Response (`200 OK`):**
+
+    {
+      "min_version_code": 4,
+      "latest_version_code": 7,
+      "action": "SUGGEST_UPDATE"
+    }
+
+- `action` is decided by the server (thin-client principle):
+  - `FORCE_UPDATE` when `version_code < min_version_code`. The app blocks all use and starts a Google Play In-App Updates `IMMEDIATE` flow.
+  - `SUGGEST_UPDATE` when `version_code < latest_version_code`. The app shows a dismissible call to action that starts a `FLEXIBLE` update flow.
+  - `NONE` otherwise.
+- Both values are also returned, so the app can show them on the About screen.
+- **When it is called:** on every app start (foreground) and before each background sync. If `FORCE_UPDATE` comes back during a sync, the sync stops and no alerts are scheduled.
+- **Offline:** the last response is cached in DataStore. If the check fails, the app uses the cached `action`, and with no cache it uses `NONE`, so a network failure never locks a user out.
+- **Errors:** `400` with `{"error": "INVALID_VERSION_CODE"}` when `version_code` is missing or not a positive integer.
 
 ---
 
