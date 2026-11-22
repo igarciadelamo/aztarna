@@ -95,3 +95,20 @@ def test_forecast_drops_geometry_failures_keeps_weather_failures():
     low.geometry.max_elevation_deg = 15  # TOO_LOW: no forecast can fix it
     forecast = build_forecast(40.4, -3.7, [FixedSource(low, event(10))], now=NOW)
     assert [e.evaluation.reason_code for e in forecast.events] == ["WEATHER_UNKNOWN"]
+
+
+def test_dev_console_off_by_default():
+    assert client.get("/dev").status_code == 404
+
+
+def test_dev_console_when_enabled(monkeypatch):
+    import importlib
+
+    from aztarna import main
+
+    monkeypatch.setenv("AZTARNA_DEV_UI", "1")
+    r = TestClient(importlib.reload(main).app).get("/dev")
+    assert r.status_code == 200
+    assert "Aztarna Dev Console" in r.text
+    monkeypatch.delenv("AZTARNA_DEV_UI")
+    importlib.reload(main)  # back to the default app for other tests

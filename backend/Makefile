@@ -7,7 +7,8 @@ setup:
 	uv run pre-commit install
 
 run:
-	uv run uvicorn aztarna.main:app --reload --no-access-log
+	@echo "Dev console: http://127.0.0.1:8000/dev"
+	AZTARNA_DEV_UI=1 uv run uvicorn aztarna.main:app --reload --no-access-log
 
 test:
 	uv run pytest

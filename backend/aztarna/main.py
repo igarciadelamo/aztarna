@@ -1,10 +1,11 @@
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from aztarna import weather
 from aztarna.forecast import build_forecast
@@ -73,3 +74,11 @@ def sky_forecast(
 ) -> ForecastResponse:
     # Re-round server-side: never trust the client to have done it (privacy, PRODUCT.md §3).
     return build_forecast(round(lat, 1), round(lon, 1), SOURCES)
+
+
+# Manual testing page, only when AZTARNA_DEV_UI=1 (set by `make run`); never in Docker/production.
+if os.environ.get("AZTARNA_DEV_UI") == "1":
+
+    @app.get("/dev", include_in_schema=False)
+    def dev_console() -> FileResponse:
+        return FileResponse(Path(__file__).parent / "dev.html")
