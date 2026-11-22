@@ -1,4 +1,4 @@
-.PHONY: setup run test lint format docker
+.PHONY: setup run test lint format docker tips-strings
 
 setup:
 	@command -v uv >/dev/null || { echo "uv not found: brew install uv (or see https://docs.astral.sh/uv/)"; exit 1; }
@@ -23,3 +23,8 @@ format:
 docker:
 	docker build -t aztarna-backend .
 	docker run --rm -p 8000:8000 -v aztarna-data:/data aztarna-backend
+
+# English <string> entries for the Android app, generated from aztarna/tips.py (see android/README.md).
+tips-strings:
+	@uv run python -c "from xml.sax.saxutils import escape; from aztarna.tips import TEXT; \
+	[print(f'    <string name=\"tip_{c.lower()}\">' + escape(t).replace(chr(39), chr(92) + chr(39)) + '</string>') for c, t in TEXT.items()]"

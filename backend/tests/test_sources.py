@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from aztarna import weather
+from aztarna import tips, weather
 from aztarna.astro import direction, nights
 from aztarna.evaluation import evaluate
 from aztarna.models import Category, Geometry, NormalizedSkyEvent, Timing, Weather
@@ -208,3 +208,27 @@ def test_weather_budget_caps_upstream_calls(monkeypatch):
     assert weather.hourly_cloud_cover(1.0, 0.0) == {utc(2026, 1, 1): 5}  # cache still served
     assert weather.hourly_cloud_cover(5.0, 0.0) == {}  # over budget: unknown, never "clear"
     assert weather.budget_left() == 0
+
+
+def test_tips_cover_every_category_and_have_text():
+    used = {
+        c
+        for codes in [*tips.BY_CATEGORY.values(), *tips.BY_TARGET.values(), tips.CONJUNCTION]
+        for c in codes
+    }
+    assert used <= tips.TEXT.keys()  # every code has English source copy
+    assert set(tips.BY_CATEGORY) == set(Category)
+
+
+def test_tips_specific_first_no_duplicates():
+    jupiter = tips.for_event(
+        event(Category.PLANET, max_elevation_deg=50).model_copy(
+            update={"target": "JUPITER_OPPOSITION"}
+        )
+    )
+    assert jupiter[:2] == ["OPPOSITION_BRIGHTEST", "JUPITER_MOONS"]
+    pair = tips.for_event(
+        event(Category.PLANET).model_copy(update={"target": "MOON_VENUS_CONJUNCTION"})
+    )
+    assert pair[0] == "CONJUNCTION_PAIR"
+    assert len(pair) == len(set(pair))

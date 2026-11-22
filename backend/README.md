@@ -24,6 +24,7 @@ Lightweight stateless REST API (`GET /v1/sky-forecast`) in **Python (FastAPI + S
 | Lint / format check | `make lint` |
 | Auto-fix lint + format | `make format` |
 | Build and run the Docker image | `make docker` |
+| English Android strings for tip codes | `make tips-strings` (see `android/README.md`) |
 
 **Pre-commit hook** (`.pre-commit-config.yaml` at the repo root, installed by `make setup`): on each
 commit that touches `backend/`, it runs `ruff check --fix`, `ruff format` and `pytest`. If a hook

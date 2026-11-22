@@ -55,6 +55,7 @@ class NormalizedSkyEvent(BaseModel):
     # Filled by the forecast pipeline after the sources run.
     weather: Weather | None = None
     evaluation: Evaluation | None = None
+    tips: list[str] = []  # static viewing-tip codes, localized by the app (aztarna/tips.py)
 
 
 class Tonight(BaseModel):

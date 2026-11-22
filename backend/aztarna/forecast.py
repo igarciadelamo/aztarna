@@ -1,7 +1,7 @@
 import logging
 from datetime import UTC, datetime, timedelta
 
-from aztarna import astro, weather
+from aztarna import astro, tips, weather
 from aztarna.evaluation import evaluate
 from aztarna.models import ForecastResponse, NormalizedSkyEvent, Tonight
 from aztarna.sources import EventSource
@@ -40,6 +40,7 @@ def build_forecast(
         e.evaluation = evaluate(e)
     events = [e for e in events if e.evaluation.reason_code in WEATHER_REASONS]
     for e in events:
+        e.tips = tips.for_event(e)
         e.geometry.start_direction = astro.direction(e.geometry.start_azimuth_deg)
         e.geometry.end_direction = astro.direction(e.geometry.end_azimuth_deg)
         if e.evaluation.is_worth_looking:
