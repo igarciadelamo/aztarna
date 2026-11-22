@@ -57,7 +57,7 @@ reason why the server cannot provide it.
 
 ### Tech Stack
 - **Android Client:** Kotlin, Jetpack Compose (Material 3), Hilt, Room, DataStore, WorkManager, and AlarmManager (following the clean architecture baseline of *Txoka*, TODO: link repo). Min SDK 26 (proposed), target the latest SDK.
-- **Self-Hosted Backend:** Lightweight stateless REST API in **Python (FastAPI + Skyfield)**.
+- **Self-Hosted Backend:** Lightweight stateless REST API in **Python (FastAPI + Skyfield)**. Managed with uv and shipped as a single Docker image; setup plan, routes and code layout are in [`backend/README.md`](backend/README.md).
 
 ### Backend Language Decision
 We keep a backend: it lets evaluation logic change without app releases and gives a place for version
