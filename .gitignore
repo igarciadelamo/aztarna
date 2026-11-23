@@ -22,3 +22,15 @@ local.properties
 
 # macOS
 .DS_Store
+
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+
+# Backend local DATA_DIR (TLE file)
+backend/data/
+
+# Skyfield ephemeris (downloaded by make setup / Docker build)
+backend/aztarna/data/*.bsp

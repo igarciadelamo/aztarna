@@ -24,6 +24,8 @@ This document specifies the functional data pipeline for **Aztarna** in English,
 - **Handling & fallback:**
   - Fetch once per day, validate non-empty response and expected objects (such as `25544`), and atomically replace the stored file only after validation succeeds.
   - If the fetch fails, keep the previous valid file. If orbital data becomes too stale to predict accurate passes, omit satellite pass events rather than reporting inaccurate pass times.
+- **Propagation:** Skyfield `EarthSatellite` (wraps `python-sgp4`): `find_events()` for rise/culminate/set and `is_sunlit()` for illumination. A pass counts as visible only when the satellite is sunlit, the observer is in darkness (Sun below -6°), and the elevation is ≥10°.
+- **Brightness:** CelesTrak does not provide magnitude. We use the QuickSat/McCants model: a standard magnitude per object (at 1000 km and a 90° phase angle), scaled by range and illuminated fraction. The standard magnitudes are fitted to Heavens-Above (ISS −1.9, Tiangong −0.2; 27 passes over Madrid on 2026-11-22). The result matches Heavens-Above within about 0.3 mag (max 0.6), with times within seconds and elevations within 2°, and `tests/test_sources.py` keeps it that way. Mike McCants' `qs.mag` list is the upgrade path if the satellite list grows.
 
 ### 2.2 Local Weather & Cloud Cover — Open-Meteo
 - **Endpoint:**
@@ -39,44 +41,40 @@ This document specifies the functional data pipeline for **Aztarna** in English,
   - Query on demand using rounded coordinates (`lat` and `lon` rounded to 1 decimal place) without storing user coordinates.
   - Cache responses briefly per rounded coordinate pair to stay well within daily/hourly call limits.
   - On Open-Meteo errors or timeouts: serve expired cached weather data if available; if no weather data is available, mark cloud cover as unknown (`null`) and do not assume clear skies.
+  - Attribution is required: the data is CC BY 4.0, so show "Weather data by Open-Meteo.com" in the app's About screen.
+- **Alternative (not wired):** MET Norway Locationforecast 2.0 (`https://api.met.no/weatherapi/locationforecast/2.0/compact`, `cloud_area_fraction`). It is free, including commercial use, and needs an identifying `User-Agent`. Switch to it if Open-Meteo's non-commercial terms ever stop fitting.
 
-### 2.3 Lunar, Solar & Eclipse Ephemerides — USNO Astronomical Applications API
-- **Endpoints:**
-  - Moon phases for a year: `https://aa.usno.navy.mil/api/moon/phases/year?year=YEAR`
-  - Moon phases starting from a date (`nump` from `1` to `99`): `https://aa.usno.navy.mil/api/moon/phases/date?date=DATE&nump=NUMP`
-  - Sun and Moon data for one day (`date`, `coords=lat,lon`, optional `tz`, `dst`): `https://aa.usno.navy.mil/api/rstt/oneday?date=DATE&coords=COORDS`
-  - Solar eclipses for a year (`1800`–`2050`): `https://aa.usno.navy.mil/api/eclipses/solar/year?year=YEAR`
-- **Registration / API key:** Not required (public GET JSON / GeoJSON endpoints).
-- **Limitations & usage policy:**
-  - Public government service; avoid excessive or uncached repeated requests and cache results appropriately.
-  - Specific endpoints have range constraints (e.g., phases cover `1700`–`2100`, `nump` is `1`–`99`, and solar eclipse year listings cover `1800`–`2050`).
-- **What it returns:**
-  - JSON / GeoJSON containing lunar phase timestamps/types, current phase (`curphase`), fraction illuminated (`fracillum`), lunar/solar phenomena (`moondata`, `sundata`), or eclipse dates/circumstances.
-- **Handling & fallback:**
-  - Cache phase and calendar lookups so future dates do not trigger repeated calls; if an external lookup fails, fall back to cached data or omit that specific ephemeris item rather than guessing times.
+### 2.3 Moon, Planets & Eclipses — Skyfield (local computation, no network)
+- **Library:** Skyfield (`https://rhodesmill.org/skyfield/`), MIT-licensed. It is the same library used for satellites, so the backend has a single astronomy dependency.
+- **Ephemeris:** JPL `de421.bsp` (~17 MB, covers 1900–2050), downloaded once at build time and shipped with the deployment. Nothing is fetched at runtime.
+- **Registration / API key / rate limits:** None. Everything is computed in-process, so there is no external call to fail.
+- **Covers:**
+  - moon phases (`almanac.moon_phases`) and illumination (`fraction_illuminated`)
+  - rise/set for the Sun, Moon and planets
+  - twilight and dusk/dawn (`almanac.dark_twilight_day`)
+  - oppositions and conjunctions (`almanac.oppositions_conjunctions`)
+  - lunar eclipses (`eclipselib.lunar_eclipses`)
+- **Not covered:** solar eclipses. They are not in the MVP list. Add Astronomy Engine (Python port) if they are ever needed.
+- **Why not USNO AA API:** it adds an outage risk and range-limited endpoints for data we can compute ourselves.
+- **Handling:** Compute per request for the rounded location. Results are deterministic, so no cache is needed.
 
-### 2.4 Meteor Showers — Public Calendars & Dynamic Moon/Weather Evaluation
-- **Sources:**
-  - Public meteor shower schedules/lists such as the International Meteor Organization (IMO) meteor shower calendar (`https://www.imo.net/calendar/`) or open meteor shower datasets/catalogs (such as shower activity/peak listings).
-- **Registration / API key:** Not required for public calendars/feeds.
-- **Limitations & usage policy:**
-  - Annual/seasonal calendars are published on a yearly or seasonal cycle and may be published as web pages, tables, CSVs, or JSON feeds rather than a single standardized real-time REST API.
-  - Because calendars are not real-time weather/visibility feeds, active dates and peak nights must be crossed dynamically with lunar illumination (from the lunar source) and cloud cover (from Open-Meteo).
-- **What it returns:**
-  - Meteor shower names, active date ranges, peak dates/times, and expected activity/rates.
-- **Handling & fallback:**
-  - Refresh periodically via an automated scheduled job and store a validated local copy; keep the last valid copy if a refresh fails, and evaluate visibility dynamically against moon illumination and weather.
+### 2.4 Meteor Showers — Static Table (from IMO Working List)
+- **Source:** IMO Meteor Shower Calendar (`https://www.imo.net/resources/calendar/`). It is published yearly as a PDF, and Table 5 is the working list. There is no CSV, JSON or API.
+- **Approach:** A hand-maintained table in the repo of the ~10 major showers (Quadrantids, Lyrids, Eta Aquariids, Perseids, Orionids, Leonids, Geminids, Ursids, Southern Delta Aquariids, Draconids), with `code`, active window, solar-longitude peak, ZHR, and radiant RA/Dec. Update it by hand once a year from the new IMO PDF.
+- **Evaluation:** Compute the radiant elevation and moon illumination with Skyfield, take cloud cover from 2.2, and derive the effective rate from ZHR × sin(radiant elevation).
+- **Fallback:** None needed, because the data is static.
 
 ---
 
 ## 3. Unification into a Single Canonical Format (`NormalizedSkyEvent`)
-All sources produce different shapes of data (orbital elements propagated into passes, lunar/solar/eclipse data, and meteor shower windows). To let the forecast service query and return all phenomena for a given day and rounded location uniformly, every item is mapped to a single structure (`NormalizedSkyEvent`):
+All sources produce different shapes of data (orbital elements propagated into passes, lunar/solar/eclipse data, and meteor shower windows). Every item is mapped to a single structure (`NormalizedSkyEvent`), and that structure **is** the item type of `events` in the public API (`PRODUCT.md` §5). No separate DTO. The payload carries codes only and the client localizes them. Every derived value the app shows or acts on is computed here; the client does no calculation (`PRODUCT.md` §3, thin-client principle).
 
-- **`id`**: Deterministic unique identifier for the event and time window.
-- **`category`**: Unified event type (`SATELLITE`, `METEOR_SHOWER`, `MOON`, `PLANET`, `ECLIPSE`).
-- **`source`**: Origin identifier (`CELESTRAK_SGP4`, `USNO_API`, `SHOWER_FEED`, etc.).
-- **`target`**: Internal target code and localization keys (`name_key`, `subtitle_key`) so localized text is resolved cleanly without hardcoding sentences in the event schema.
-- **`timing`**: Normalized UTC timestamps (`window_start`, `peak_time`, `window_end`) and `duration_seconds` when applicable.
-- **`geometry`**: Normalized observational metrics (`magnitude`, `max_elevation_deg`, `start_azimuth_deg`, `end_azimuth_deg`, `rate_per_hour`, `moon_illumination_percent`), set to `null` whenever a field does not apply to that phenomenon type.
-- **`weather`**: `cloud_cover_percent` and `condition_code` matched to the event's time window, or `null` if weather data is unavailable.
-- **`evaluation`**: `is_worth_looking` (boolean) and `reason_code` summarizing whether visibility, elevation, moon glare, and cloud cover make the event worth watching.
+- **`id`**: `{category}:{target_or_norad_id}:{window_start}`. Unique within one response, but **not stable across syncs**: orbit updates shift `window_start`. Clients reschedule alerts by time, not by id (`PRODUCT.md` §3).
+- **`category`**: `SATELLITE`, `METEOR_SHOWER`, `MOON`, `PLANET`, `ECLIPSE`.
+- **`target`**: Stable code (`ISS`, `TIANGONG`, `GEMINIDS`, `JUPITER`, `FULL_MOON`, …). The client maps it to a localized name, and unknown codes are shown raw.
+- **`source`**: `CELESTRAK_SGP4`, `SKYFIELD`, `SHOWER_TABLE`. Used for attribution and debugging.
+- **`timing`**: UTC `window_start`, `peak_time`, `window_end`, plus `duration_seconds`. `notify_at` (`window_start` − 30 min) and `recheck_at` (`window_start` − 2 h) are set only when `is_worth_looking` is true, and are `null` otherwise.
+- **`geometry`**: `magnitude`, `max_elevation_deg`, `start_azimuth_deg`, `end_azimuth_deg` (0–360, N=0, clockwise), `start_direction`, `end_direction` (16-point compass codes), `rate_per_hour`, `moon_illumination_percent`, `moon_elevation_deg` (Moon altitude at peak; meteor moon-glare only counts when the Moon is up). A field is `null` when it does not apply.
+- **`weather`**: `cloud_cover_percent` and `condition_code` (`CLEAR`, `PARTLY_CLOUDY`, `OVERCAST`) for the event window, or `null` if unknown.
+- **`tips`**: list of static viewing-tip codes for the event's category and target (`backend/aztarna/tips.py`). Added by the pipeline, not by sources.
+- **`evaluation`**: `is_worth_looking` and `reason_code` (`GOOD_CONDITIONS`, `TOO_LOW`, `TOO_FAINT`, `MOON_GLARE`, `TOO_CLOUDY`, `WEATHER_UNKNOWN`; geometry rules are checked before weather, see `backend/aztarna/evaluation.py`). Events that fail on geometry are dropped from the API response; only `GOOD_CONDITIONS`, `TOO_CLOUDY` and `WEATHER_UNKNOWN` reach the client. The client turns `reason_code` into the localized subtitle.
