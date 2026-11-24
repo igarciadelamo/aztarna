@@ -14,7 +14,7 @@ from skyfield.api import wgs84
 from skyfield.iokit import parse_tle_file
 
 from aztarna.astro import body, eph, observer, t, ts
-from aztarna.models import Category, Geometry, NormalizedSkyEvent, Timing
+from aztarna.models import Category, Geometry, SkyEvent, Timing
 
 log = logging.getLogger(__name__)
 
@@ -89,7 +89,7 @@ class SatelliteSource:
         for sat in sats:
             if sat.model.satnum not in TRACKED:
                 continue
-            if abs(start - sat.epoch.utc_datetime()) > MAX_TLE_AGE:
+            if start - sat.epoch.utc_datetime() > MAX_TLE_AGE:
                 log.warning("stale TLE for %s, skipping its passes", sat.model.satnum)
                 continue
             out += self._passes(sat, lat, lon, start, end)
@@ -129,7 +129,7 @@ class SatelliteSource:
         phase = float(np.arccos(np.clip(cos_phase, -1, 1)))
 
         window_start, window_end = times[first].utc_datetime(), times[last].utc_datetime()
-        return NormalizedSkyEvent(
+        return SkyEvent(
             id=f"{Category.SATELLITE}:{target}:{window_start.isoformat()}",
             category=Category.SATELLITE,
             target=target,

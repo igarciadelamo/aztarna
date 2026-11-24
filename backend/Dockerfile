@@ -15,6 +15,9 @@ ENV PATH=/app/.venv/bin:$PATH DATA_DIR=/data
 USER app
 VOLUME /data
 EXPOSE 8000
+# Liveness only, on purpose: /health returns 200 even when "degraded" (stale TLE, weather budget
+# spent). Restarting can't fix an upstream outage and would refetch CelesTrak; degraded is for the
+# uptime monitor's keyword alert instead.
 HEALTHCHECK --interval=30s --timeout=3s \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"
 # --no-access-log: no IP logs (privacy rule, PRODUCT.md §3).

@@ -1,7 +1,7 @@
 """Static viewing tips. The API sends codes only; the app localizes them (es, eu, en).
 TEXT is the English source copy for the Android string resources: keep both in sync."""
 
-from aztarna.models import Category, NormalizedSkyEvent
+from aztarna.models import Category, SkyEvent
 
 TEXT = {
     # General
@@ -73,7 +73,7 @@ BY_TARGET = {
 CONJUNCTION = ["CONJUNCTION_PAIR", "TWILIGHT_PHOTO"]
 
 
-def for_event(event: NormalizedSkyEvent) -> list[str]:
+def for_event(event: SkyEvent) -> list[str]:
     codes = BY_TARGET.get(event.target, [])
     if event.target.endswith("_CONJUNCTION"):
         codes = codes + CONJUNCTION

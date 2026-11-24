@@ -67,7 +67,7 @@ This document specifies the functional data pipeline for **Aztarna** in English,
 ---
 
 ## 3. Unification into a Single Canonical Format (`NormalizedSkyEvent`)
-All sources produce different shapes of data (orbital elements propagated into passes, lunar/solar/eclipse data, and meteor shower windows). Every item is mapped to a single structure (`NormalizedSkyEvent`), and that structure **is** the item type of `events` in the public API (`PRODUCT.md` §5). No separate DTO. The payload carries codes only and the client localizes them. Every derived value the app shows or acts on is computed here; the client does no calculation (`PRODUCT.md` §3, thin-client principle).
+All sources produce different shapes of data (orbital elements propagated into passes, lunar/solar/eclipse data, and meteor shower windows). Every item is mapped to a single structure, and that structure **is** the item type of `events` in the public API (`PRODUCT.md` §5). No separate DTO. In code, sources build `SkyEvent`; the pipeline adds weather, evaluation and tips and returns `NormalizedSkyEvent`, which has the same fields with `evaluation` required, so the OpenAPI schema never marks it nullable. The payload carries codes only and the client localizes them. Every derived value the app shows or acts on is computed here; the client does no calculation (`PRODUCT.md` §3, thin-client principle).
 
 - **`id`**: `{category}:{target_or_norad_id}:{window_start}`. Unique within one response, but **not stable across syncs**: orbit updates shift `window_start`. Clients reschedule alerts by time, not by id (`PRODUCT.md` §3).
 - **`category`**: `SATELLITE`, `METEOR_SHOWER`, `MOON`, `PLANET`, `ECLIPSE`.

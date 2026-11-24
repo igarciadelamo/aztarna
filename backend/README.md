@@ -133,7 +133,7 @@ use a fixture TLE.
 ### Docker
 A single image built from a multi-stage `Dockerfile`:
 1. **Build stage:** `python:3.13-slim`, with the uv binary copied from `ghcr.io/astral-sh/uv:0.13.9`.
-   It runs `uv sync --locked --no-dev` (and will download `de421.bsp` once Skyfield lands).
+   It runs `uv sync --locked --no-dev` and downloads the `de421.bsp` ephemeris into the image.
 2. **Runtime stage:** `python:3.13-slim` with only `.venv` and the code. Runs as a
    non-root user, exposes port `8000`, and has a `HEALTHCHECK` on `/health`.
 3. **Command:** `uvicorn aztarna.main:app --host 0.0.0.0 --port 8000 --no-access-log`.

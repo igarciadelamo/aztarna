@@ -1,4 +1,5 @@
-"""API models. NormalizedSkyEvent is both the internal canonical format and the API event shape."""
+"""API models. Sources produce SkyEvent; the pipeline adds weather, evaluation and tips and returns
+NormalizedSkyEvent (the API event shape, same fields with `evaluation` required)."""
 
 from datetime import datetime
 from enum import StrEnum
@@ -45,7 +46,7 @@ class Evaluation(BaseModel):
     reason_code: str
 
 
-class NormalizedSkyEvent(BaseModel):
+class SkyEvent(BaseModel):
     id: str
     category: Category
     target: str
@@ -56,6 +57,13 @@ class NormalizedSkyEvent(BaseModel):
     weather: Weather | None = None
     evaluation: Evaluation | None = None
     tips: list[str] = []  # static viewing-tip codes, localized by the app (aztarna/tips.py)
+
+
+class NormalizedSkyEvent(SkyEvent):
+    """API shape of an event. The pipeline always evaluates, so `evaluation` is never null here
+    (sources build SkyEvent, which has no evaluation yet)."""
+
+    evaluation: Evaluation
 
 
 class Tonight(BaseModel):

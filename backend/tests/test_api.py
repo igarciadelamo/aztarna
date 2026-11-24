@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from aztarna.forecast import build_forecast
 from aztarna.main import app
-from aztarna.models import Category, Geometry, NormalizedSkyEvent, Timing
+from aztarna.models import Category, Geometry, SkyEvent, Timing
 from aztarna.sources import satellites
 
 client = TestClient(app)
@@ -55,9 +55,9 @@ def test_sky_forecast_ok():
         assert e["timing"]["notify_at"] is None
 
 
-def event(minutes: int) -> NormalizedSkyEvent:
+def event(minutes: int) -> SkyEvent:
     start = NOW + timedelta(minutes=minutes)
-    return NormalizedSkyEvent(
+    return SkyEvent(
         id=f"SATELLITE:25544:{start.isoformat()}",
         category=Category.SATELLITE,
         target="ISS",
@@ -112,3 +112,41 @@ def test_dev_console_when_enabled(monkeypatch):
     assert "Aztarna Dev Console" in r.text
     monkeypatch.delenv("AZTARNA_DEV_UI")
     importlib.reload(main)  # back to the default app for other tests
+
+
+def test_tonight_in_the_morning_is_the_coming_night():
+    # Review bug: at 10:00 UTC `tonight` used to be all null (it looked at the night that had ended).
+    f = build_forecast(40.4, -3.7, [], now=datetime(2026, 11, 24, 10, tzinfo=UTC))
+    assert f.tonight.dusk.date() == datetime(2026, 11, 24).date()
+    assert f.tonight.dusk > f.generated_at
+    assert f.valid_until == f.generated_at + timedelta(hours=12)
+
+
+def test_tonight_before_dawn_keeps_current_night_and_expires_at_dawn():
+    # Pre-dawn passes are common, so the ending night stays "tonight" until dawn, then the response
+    # expires so the app re-syncs.
+    f = build_forecast(40.4, -3.7, [], now=datetime(2026, 11, 24, 6, tzinfo=UTC))
+    assert f.tonight.dusk.date() == datetime(2026, 11, 23).date()
+    assert f.valid_until == f.tonight.dawn
+
+
+def test_highlight_never_points_at_a_finished_event():
+    now = datetime(2026, 11, 24, 21, tzinfo=UTC)
+    done, upcoming = event(-90), event(30)  # relative to NOW (2026-11-15 18:00)
+    for e, start in ((done, now - timedelta(minutes=30)), (upcoming, now + timedelta(minutes=30))):
+        e.timing.window_start = e.timing.peak_time = start
+        e.timing.window_end = start + timedelta(minutes=5)
+    from aztarna import weather
+
+    weather._cache[(40.4, -3.7)] = (
+        float("inf"),
+        {now.replace(minute=0) + timedelta(hours=h): 0 for h in range(-2, 3)},
+    )
+    f = build_forecast(40.4, -3.7, [FixedSource(done, upcoming)], now=now)
+    assert f.tonight.highlight_event_id == upcoming.id
+
+
+def test_openapi_event_evaluation_is_required_and_not_null():
+    schema = app.openapi()["components"]["schemas"]["NormalizedSkyEvent"]
+    assert "evaluation" in schema["required"]
+    assert schema["properties"]["evaluation"] == {"$ref": "#/components/schemas/Evaluation"}
