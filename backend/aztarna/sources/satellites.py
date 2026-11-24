@@ -27,7 +27,7 @@ RETRY_S = 3600  # after a failed fetch, don't retry on every request
 MAX_TLE_AGE = timedelta(days=7)  # older than this, pass times are unreliable: emit nothing
 MIN_ALT_DEG = 10
 SUN_DEG = -6
-STEP_S = 10
+STEP_S = 2  # shadow exit of a high pass moves ~1°/s: 10 s steps put the start up to 5° off
 SOURCE = "CELESTRAK_SGP4"
 
 
@@ -144,6 +144,9 @@ class SatelliteSource:
                 magnitude=magnitude(std_mag, float(dist.km[peak]), phase),
                 max_elevation_deg=round(float(alt.degrees[peak]), 1),
                 start_azimuth_deg=round(float(az.degrees[first])),
+                start_elevation_deg=round(float(alt.degrees[first]), 1),
+                peak_azimuth_deg=round(float(az.degrees[peak])),
                 end_azimuth_deg=round(float(az.degrees[last])),
+                end_elevation_deg=round(float(alt.degrees[last]), 1),
             ),
         )

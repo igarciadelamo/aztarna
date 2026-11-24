@@ -41,7 +41,7 @@ def _event(category, target, night: Night, view, **geometry) -> SkyEvent:
         ),
         geometry=Geometry(
             max_elevation_deg=round(view.altitude_deg, 1),
-            start_azimuth_deg=round(view.azimuth_deg),
+            peak_azimuth_deg=round(view.azimuth_deg),
             **geometry,
         ),
     )

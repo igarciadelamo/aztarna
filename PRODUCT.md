@@ -132,6 +132,7 @@ backend has one model end to end.
         "dusk": "2026-11-15T17:21:00Z",
         "dawn": "2026-11-16T06:52:00Z",
         "highlight_event_id": "SATELLITE:25544:2026-11-15T21:39:15Z",
+        "next_worthwhile_event_id": "SATELLITE:25544:2026-11-15T21:39:15Z",
         "cloud_cover_percent": 10,
         "condition_code": "CLEAR"
       },
@@ -153,9 +154,15 @@ backend has one model end to end.
             "magnitude": -3.8,
             "max_elevation_deg": 74,
             "start_azimuth_deg": 270,
+            "start_elevation_deg": 10,
+            "peak_azimuth_deg": 340,
             "end_azimuth_deg": 45,
+            "end_elevation_deg": 12,
             "start_direction": "W",
+            "peak_direction": "NNW",
             "end_direction": "NE",
+            "brightness_code": "VERY_BRIGHT",
+            "height_code": "HIGH",
             "rate_per_hour": null,
             "moon_illumination_percent": null,
             "moon_elevation_deg": null
@@ -169,7 +176,10 @@ backend has one model end to end.
 
 Everything is precomputed (thin-client principle, §3):
 - **Only events that weather could make worth looking are returned.** Events that fail on geometry (`TOO_LOW`, `TOO_FAINT`, `MOON_GLARE`) are dropped, so every `reason_code` the app sees is `GOOD_CONDITIONS`, `TOO_CLOUDY` or `WEATHER_UNKNOWN`.
-- **Hero card:** `tonight.highlight_event_id`. If it is `null`, the app shows the rest state using the `tonight` weather.
+- **Hero card:** `tonight.highlight_event_id`. If it is `null`, the app shows the rest state using the `tonight` weather, plus "next clear chance" from `tonight.next_worthwhile_event_id` (the first worthwhile event in the whole horizon, or `null`).
+- **Sky diagram:** satellites carry a path (`start_*` → `peak_azimuth_deg`/`max_elevation_deg` → `end_*`, elevations included because a pass can appear high up when leaving Earth's shadow). Other events carry only the peak position (`peak_azimuth_deg`, `max_elevation_deg`).
+- **Human labels:** `brightness_code` (`VERY_BRIGHT` ≤ −2 mag, `BRIGHT` ≤ 0, `VISIBLE`; the Moon is always `VERY_BRIGHT`; `null` without a magnitude) and `height_code` (`HIGH` ≥ 60°, `MID` ≥ 30°, `LOW`). The app shows these words and keeps the raw numbers for the detail view.
+- **Grouping by night:** the app groups the agenda by the local date of each event's night (an event before local noon belongs to the previous date's night). This is formatting, not calculation.
 - **Tips:** static viewing-tip codes per event type, most specific first (e.g. `JUPITER_MOONS` before the generic planet tips). The English source copy for each code is in `backend/aztarna/tips.py` (`TEXT`); the app translates them like other codes.
 - **Directions:** 16-point compass codes (`N`, `NNE`, … `NW`, `NNW`). Degrees are kept for the v2 sky compass.
 - **Alert timing:** `notify_at` and `recheck_at`. Both are `null` for events that are not `is_worth_looking`.

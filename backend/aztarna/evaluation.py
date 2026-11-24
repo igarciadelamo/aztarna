@@ -42,3 +42,30 @@ def evaluate(event: SkyEvent) -> Evaluation:
 
 def _no(reason: str) -> Evaluation:
     return Evaluation(is_worth_looking=False, reason_code=reason)
+
+
+# Display labels: thresholds live here, the app only localizes the codes.
+VERY_BRIGHT_MAG = -2  # brighter than any star
+BRIGHT_MAG = 0
+HIGH_DEG = 60
+MID_DEG = 30
+
+
+def brightness_code(event: SkyEvent) -> str | None:
+    if event.category == Category.MOON:
+        return "VERY_BRIGHT"
+    mag = event.geometry.magnitude
+    if mag is None:
+        return None
+    if mag <= VERY_BRIGHT_MAG:
+        return "VERY_BRIGHT"
+    return "BRIGHT" if mag <= BRIGHT_MAG else "VISIBLE"
+
+
+def height_code(event: SkyEvent) -> str | None:
+    alt = event.geometry.max_elevation_deg
+    if alt is None:
+        return None
+    if alt >= HIGH_DEG:
+        return "HIGH"
+    return "MID" if alt >= MID_DEG else "LOW"
