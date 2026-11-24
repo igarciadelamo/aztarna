@@ -4,13 +4,11 @@ EventSource and is registered in SOURCES. The forecast pipeline only knows this 
 from datetime import datetime
 from typing import Protocol
 
-from aztarna.models import NormalizedSkyEvent
+from aztarna.models import SkyEvent
 
 
 class EventSource(Protocol):
-    def events(
-        self, lat: float, lon: float, start: datetime, end: datetime
-    ) -> list[NormalizedSkyEvent]:
+    def events(self, lat: float, lon: float, start: datetime, end: datetime) -> list[SkyEvent]:
         """Events visible from (lat, lon) whose window overlaps [start, end). UTC datetimes."""
         ...
 

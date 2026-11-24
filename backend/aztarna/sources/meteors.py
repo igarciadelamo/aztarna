@@ -9,7 +9,7 @@ import numpy as np
 from skyfield.api import Star
 
 from aztarna.astro import best_view, body, night_near, observer, t
-from aztarna.models import Category, Geometry, NormalizedSkyEvent, Timing
+from aztarna.models import Category, Geometry, SkyEvent, Timing
 
 TABLE = Path(__file__).parent.parent / "data" / "meteor_showers.json"
 SUN_DEG = -12  # meteors need real darkness
@@ -47,7 +47,7 @@ class MeteorSource:
             moon_alt = moon.altaz()[0].degrees
             illumination = moon.fraction_illuminated(body("sun")) * 100
             out.append(
-                NormalizedSkyEvent(
+                SkyEvent(
                     id=f"{Category.METEOR_SHOWER}:{shower['code']}:{night.dusk.isoformat()}",
                     category=Category.METEOR_SHOWER,
                     target=shower["code"],

@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 
 from aztarna import astro, tips, weather
 from aztarna.evaluation import evaluate
-from aztarna.models import ForecastResponse, NormalizedSkyEvent, Tonight
+from aztarna.models import ForecastResponse, NormalizedSkyEvent, SkyEvent, Tonight
 from aztarna.sources import EventSource
 
 log = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ def build_forecast(
     now: datetime | None = None,
 ) -> ForecastResponse:
     now = now or datetime.now(UTC)
-    events: list[NormalizedSkyEvent] = []
+    events: list[SkyEvent] = []
     for source in sources:
         try:
             events += source.events(lat, lon, now, now + HORIZON)
@@ -47,25 +47,39 @@ def build_forecast(
             e.timing.notify_at = e.timing.window_start - NOTIFY_LEAD
             e.timing.recheck_at = e.timing.window_start - RECHECK_LEAD
 
+    night = current_or_next_night(lat, lon, now)
+    valid_until = now + VALIDITY
+    if night and night.dusk <= now:
+        # Inside a night, `tonight` describes a night that ends at dawn: expire with it so the app
+        # re-syncs and gets the next night instead of showing an ended one all day.
+        valid_until = min(valid_until, night.dawn)
     return ForecastResponse(
         generated_at=now,
-        valid_until=now + VALIDITY,
-        tonight=tonight(lat, lon, now, events, hourly),
-        events=events,
+        valid_until=valid_until,
+        tonight=tonight(night, now, events, hourly),
+        events=[NormalizedSkyEvent.model_validate(e.model_dump()) for e in events],
     )
 
 
-def tonight(lat, lon, now, events, hourly) -> Tonight:
-    night = astro.night_near(lat, lon, now, TONIGHT_SUN_DEG)
-    if not night or night.dawn < now:
-        return Tonight()
+def current_or_next_night(lat: float, lon: float, now: datetime) -> astro.Night | None:
+    """The night we're in (until its dawn), else the next one. Keeping the current night until dawn
+    matters: many Tiangong/ISS passes happen in the last hour before dawn."""
+    upcoming = astro.nights(lat, lon, now, now + timedelta(days=2), TONIGHT_SUN_DEG)
+    return next((n for n in upcoming if n.dawn > now), None)
+
+
+def tonight(night: astro.Night | None, now, events, hourly) -> Tonight:
+    if not night:
+        return Tonight()  # polar day/night: no dusk/dawn to speak of
     # Highlight: first worthwhile event peaking tonight. ponytail: earliest wins; rank by
     # brightness/rarity if users want "the best" rather than "the next".
     highlight = next(
         (
             e
             for e in events
-            if e.evaluation.is_worth_looking and night.dusk <= e.timing.peak_time <= night.dawn
+            if e.evaluation.is_worth_looking
+            and e.timing.window_end > now  # never point at an event that's already over
+            and night.dusk <= e.timing.peak_time <= night.dawn
         ),
         None,
     )

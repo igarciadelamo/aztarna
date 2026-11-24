@@ -26,7 +26,7 @@
   | Moon / eclipse | Moon elevation ≥ 10° during the event. |
 
   Assumes a suburban sky (~Bortle 5); light pollution is not modeled.
-- **"Tonight" definition:** From local civil dusk (Sun at −6°) to the next civil dawn, computed by the server for the rounded location and returned as `tonight.dusk` / `tonight.dawn` (UTC). The client only formats them in the device time zone.
+- **"Tonight" definition:** From local civil dusk (Sun at −6°) to the next civil dawn, computed by the server for the rounded location and returned as `tonight.dusk` / `tonight.dawn` (UTC). The client only formats them in the device time zone. During the day, "tonight" is the coming night. During a night, it stays that night until dawn, because many satellite passes happen just before dawn. In that case `valid_until` is set to that dawn, so the app re-syncs instead of showing an ended night all day.
 - **Proactive Alerts:** Silent background evaluation that triggers local notifications in advance *only* when visual and weather conditions align.
 - **App Home Experience:** Clean, single-screen Material 3 interface displaying:
   - **Tonight's Hero Card:** Highlights the top worthwhile event or displays an honest rest state (*"Overcast sky or no notable events tonight"*).

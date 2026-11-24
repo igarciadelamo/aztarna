@@ -8,7 +8,7 @@ from skyfield import almanac, eclipselib
 from skyfield.magnitudelib import planetary_magnitude
 
 from aztarna.astro import Night, View, best_view, body, eph, night_near, observer, t, ts
-from aztarna.models import Category, Geometry, NormalizedSkyEvent, Timing
+from aztarna.models import Category, Geometry, SkyEvent, Timing
 
 SOURCE = "SKYFIELD"
 SUPERMOON_KM = 360_000
@@ -27,8 +27,8 @@ BRIGHT_PLANETS = {
 }
 
 
-def _event(category, target, night: Night, view, **geometry) -> NormalizedSkyEvent:
-    return NormalizedSkyEvent(
+def _event(category, target, night: Night, view, **geometry) -> SkyEvent:
+    return SkyEvent(
         id=f"{category}:{target}:{night.dusk.isoformat()}",
         category=category,
         target=target,

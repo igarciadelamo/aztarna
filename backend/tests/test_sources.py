@@ -8,7 +8,7 @@ import pytest
 from aztarna import tips, weather
 from aztarna.astro import direction, nights
 from aztarna.evaluation import evaluate
-from aztarna.models import Category, Geometry, NormalizedSkyEvent, Timing, Weather
+from aztarna.models import Category, Geometry, SkyEvent, Timing, Weather
 from aztarna.sources.meteors import MeteorSource
 from aztarna.sources.satellites import SatelliteSource, magnitude
 from aztarna.sources.sky import SkySource
@@ -113,6 +113,12 @@ def test_satellite_passes_match_heavens_above():
         assert abs(e.geometry.magnitude - mag) < 0.7, (target, start, e.geometry.magnitude)
 
 
+def test_tle_newer_than_window_start_is_used():
+    # Review: abs() used to drop events when the TLE epoch was more than 7 days *after* `start`.
+    tle = (Path(__file__).parent / "stations.tle").read_text()
+    assert SatelliteSource(read=lambda: tle).events(*MADRID, utc(2026, 11, 12), utc(2026, 11, 14))
+
+
 def test_stale_tle_emits_nothing():
     tle = (Path(__file__).parent / "stations.tle").read_text()
     assert SatelliteSource(read=lambda: tle).events(*MADRID, utc(2027, 1, 1), utc(2027, 1, 2)) == []
@@ -147,7 +153,7 @@ def test_weather_serves_stale_cache_on_failure(monkeypatch):
 
 def event(category, cloud=10, **geometry):
     start = utc(2026, 11, 22, 20)
-    return NormalizedSkyEvent(
+    return SkyEvent(
         id="x",
         category=category,
         target="X",

@@ -1,6 +1,6 @@
 """Worth-looking thresholds (PRODUCT.md §2). First failing rule gives the reason_code."""
 
-from aztarna.models import Category, Evaluation, NormalizedSkyEvent
+from aztarna.models import Category, Evaluation, SkyEvent
 
 MAX_CLOUD = 30
 SATELLITE_MAX_MAG = 0
@@ -11,7 +11,7 @@ METEOR_MAX_MOON = 50
 MOON_MIN_ALT = 10
 
 
-def evaluate(event: NormalizedSkyEvent) -> Evaluation:
+def evaluate(event: SkyEvent) -> Evaluation:
     g, w = event.geometry, event.weather
     alt = g.max_elevation_deg or 0
     match event.category:
