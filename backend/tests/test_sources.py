@@ -7,7 +7,7 @@ import pytest
 
 from aztarna import tips, weather
 from aztarna.astro import direction, nights
-from aztarna.evaluation import evaluate
+from aztarna.evaluation import brightness_code, evaluate, height_code
 from aztarna.models import Category, Geometry, SkyEvent, Timing, Weather
 from aztarna.sources.meteors import MeteorSource
 from aztarna.sources.satellites import SatelliteSource, magnitude
@@ -238,3 +238,52 @@ def test_tips_specific_first_no_duplicates():
     )
     assert pair[0] == "CONJUNCTION_PAIR"
     assert len(pair) == len(set(pair))
+
+
+# Heavens-Above start altitudes: Tiangong often appears high up, emerging from Earth's shadow.
+HEAVENS_ABOVE_START_ALT = [
+    ("TIANGONG", utc(2026, 11, 23, 5, 11, 18), 45, "ESE"),
+    ("TIANGONG", utc(2026, 11, 24, 5, 47, 2), 41, "W"),
+    ("TIANGONG", utc(2026, 11, 30, 4, 43, 11), 15, "E"),
+    ("ISS", utc(2026, 11, 28, 18, 27, 51), 10, "NW"),
+]
+
+
+def test_satellite_path_start_matches_heavens_above():
+    tle = (Path(__file__).parent / "stations.tle").read_text()
+    events = SatelliteSource(read=lambda: tle).events(*MADRID, utc(2026, 11, 22), utc(2026, 12, 2))
+    for target, start, alt, compass in HEAVENS_ABOVE_START_ALT:
+        e = min(
+            (e for e in events if e.target == target),
+            key=lambda e: abs(e.timing.window_start - start),
+        )
+        g = e.geometry
+        assert abs(g.start_elevation_deg - alt) < 3, (target, start, g.start_elevation_deg)
+        assert direction(g.start_azimuth_deg) == compass, (target, start, g.start_azimuth_deg)
+        assert g.start_elevation_deg <= g.max_elevation_deg >= g.end_elevation_deg
+        assert g.peak_azimuth_deg is not None
+
+
+def test_sky_and_meteor_events_have_peak_position_not_a_path():
+    events = [
+        *SkySource().events(*MADRID, utc(2026, 11, 20), utc(2026, 11, 28)),
+        *MeteorSource().events(*MADRID, utc(2026, 12, 10), utc(2026, 12, 16)),
+    ]
+    assert events
+    for e in events:
+        assert e.geometry.peak_azimuth_deg is not None
+        assert e.geometry.start_azimuth_deg is None and e.geometry.end_azimuth_deg is None
+
+
+@pytest.mark.parametrize(
+    ("e", "brightness", "height"),
+    [
+        (event(Category.SATELLITE, magnitude=-3.5, max_elevation_deg=75), "VERY_BRIGHT", "HIGH"),
+        (event(Category.SATELLITE, magnitude=-1, max_elevation_deg=45), "BRIGHT", "MID"),
+        (event(Category.SATELLITE, magnitude=0.5, max_elevation_deg=20), "VISIBLE", "LOW"),
+        (event(Category.MOON, max_elevation_deg=60), "VERY_BRIGHT", "HIGH"),
+        (event(Category.METEOR_SHOWER, max_elevation_deg=59.9), None, "MID"),
+    ],
+)
+def test_display_labels(e, brightness, height):
+    assert (brightness_code(e), height_code(e)) == (brightness, height)

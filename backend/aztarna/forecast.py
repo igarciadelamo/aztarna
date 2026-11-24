@@ -2,7 +2,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 from aztarna import astro, tips, weather
-from aztarna.evaluation import evaluate
+from aztarna.evaluation import brightness_code, evaluate, height_code
 from aztarna.models import ForecastResponse, NormalizedSkyEvent, SkyEvent, Tonight
 from aztarna.sources import EventSource
 
@@ -43,6 +43,9 @@ def build_forecast(
         e.tips = tips.for_event(e)
         e.geometry.start_direction = astro.direction(e.geometry.start_azimuth_deg)
         e.geometry.end_direction = astro.direction(e.geometry.end_azimuth_deg)
+        e.geometry.peak_direction = astro.direction(e.geometry.peak_azimuth_deg)
+        e.geometry.brightness_code = brightness_code(e)
+        e.geometry.height_code = height_code(e)
         if e.evaluation.is_worth_looking:
             e.timing.notify_at = e.timing.window_start - NOTIFY_LEAD
             e.timing.recheck_at = e.timing.window_start - RECHECK_LEAD
@@ -68,9 +71,17 @@ def current_or_next_night(lat: float, lon: float, now: datetime) -> astro.Night 
     return next((n for n in upcoming if n.dawn > now), None)
 
 
+def next_worthwhile(now, events) -> str | None:
+    """First worthwhile event not over yet, any night: the rest state's "next clear chance"."""
+    e = next(
+        (e for e in events if e.evaluation.is_worth_looking and e.timing.window_end > now), None
+    )
+    return e.id if e else None
+
+
 def tonight(night: astro.Night | None, now, events, hourly) -> Tonight:
     if not night:
-        return Tonight()  # polar day/night: no dusk/dawn to speak of
+        return Tonight(next_worthwhile_event_id=next_worthwhile(now, events))  # polar: no dusk/dawn
     # Highlight: first worthwhile event peaking tonight. ponytail: earliest wins; rank by
     # brightness/rarity if users want "the best" rather than "the next".
     highlight = next(
@@ -88,6 +99,7 @@ def tonight(night: astro.Night | None, now, events, hourly) -> Tonight:
         dusk=night.dusk,
         dawn=night.dawn,
         highlight_event_id=highlight.id if highlight else None,
+        next_worthwhile_event_id=next_worthwhile(now, events),
         cloud_cover_percent=w.cloud_cover_percent if w else None,
         condition_code=w.condition_code if w else None,
     )

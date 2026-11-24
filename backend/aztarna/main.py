@@ -1,3 +1,4 @@
+import json
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -5,9 +6,9 @@ from typing import Annotated
 
 from fastapi import FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
-from aztarna import weather
+from aztarna import tips, weather
 from aztarna.forecast import build_forecast
 from aztarna.models import AppVersionResponse, ForecastResponse, UpdateAction
 from aztarna.sources import SOURCES
@@ -80,5 +81,8 @@ def sky_forecast(
 if os.environ.get("AZTARNA_DEV_UI") == "1":
 
     @app.get("/dev", include_in_schema=False)
-    def dev_console() -> FileResponse:
-        return FileResponse(Path(__file__).parent / "dev.html")
+    def dev_console() -> HTMLResponse:
+        # Inject the English tip copy so the concept preview shows real sentences, not codes.
+        tips_json = json.dumps(tips.TEXT).replace("</", "<\\/")
+        html = (Path(__file__).parent / "dev.html").read_text()
+        return HTMLResponse(html.replace('"__TIPS__"', tips_json))

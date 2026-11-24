@@ -60,7 +60,7 @@ class MeteorSource:
                     ),
                     geometry=Geometry(
                         max_elevation_deg=round(view.altitude_deg, 1),
-                        start_azimuth_deg=round(view.azimuth_deg),
+                        peak_azimuth_deg=round(view.azimuth_deg),
                         rate_per_hour=round(shower["zhr"] * np.sin(np.radians(view.altitude_deg))),
                         moon_illumination_percent=round(float(illumination)),
                         moon_elevation_deg=round(float(moon_alt), 1),

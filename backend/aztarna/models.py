@@ -27,10 +27,18 @@ class Timing(BaseModel):
 class Geometry(BaseModel):
     magnitude: float | None = None
     max_elevation_deg: float | None = None
+    # Satellites have a path (start → peak → end); other events only a peak position.
     start_azimuth_deg: float | None = None
+    start_elevation_deg: float | None = None
+    peak_azimuth_deg: float | None = None
     end_azimuth_deg: float | None = None
+    end_elevation_deg: float | None = None
     start_direction: str | None = None
+    peak_direction: str | None = None
     end_direction: str | None = None
+    # Human-scale labels (server-side thresholds, app only localizes):
+    brightness_code: str | None = None  # VERY_BRIGHT | BRIGHT | VISIBLE; null without magnitude
+    height_code: str | None = None  # HIGH | MID | LOW
     rate_per_hour: float | None = None
     moon_illumination_percent: float | None = None
     moon_elevation_deg: float | None = None
@@ -70,6 +78,9 @@ class Tonight(BaseModel):
     dusk: datetime | None = None
     dawn: datetime | None = None
     highlight_event_id: str | None = None
+    next_worthwhile_event_id: str | None = (
+        None  # first worthwhile event in the horizon (rest state)
+    )
     cloud_cover_percent: int | None = None
     condition_code: str | None = None
 

@@ -109,7 +109,8 @@ def test_dev_console_when_enabled(monkeypatch):
     monkeypatch.setenv("AZTARNA_DEV_UI", "1")
     r = TestClient(importlib.reload(main).app).get("/dev")
     assert r.status_code == 200
-    assert "Aztarna Dev Console" in r.text
+    assert "Aztarna Concept Console" in r.text
+    assert '"__TIPS__"' not in r.text and "Give your eyes 15" in r.text  # tip copy injected
     monkeypatch.delenv("AZTARNA_DEV_UI")
     importlib.reload(main)  # back to the default app for other tests
 
@@ -150,3 +151,25 @@ def test_openapi_event_evaluation_is_required_and_not_null():
     schema = app.openapi()["components"]["schemas"]["NormalizedSkyEvent"]
     assert "evaluation" in schema["required"]
     assert schema["properties"]["evaluation"] == {"$ref": "#/components/schemas/Evaluation"}
+
+
+def test_next_worthwhile_points_past_cloudy_tonight():
+    now = datetime(2026, 11, 24, 12, tzinfo=UTC)
+    tonight_pass, later_pass = event(0), event(0)
+    for e, start in (
+        (tonight_pass, now + timedelta(hours=8)),
+        (later_pass, now + timedelta(days=2)),
+    ):
+        e.id = f"SATELLITE:ISS:{start.isoformat()}"
+        e.timing.window_start = e.timing.peak_time = start
+        e.timing.window_end = start + timedelta(minutes=5)
+    from aztarna import weather
+
+    hours = {now.replace(minute=0) + timedelta(hours=h): 0 for h in range(72)}
+    hours[(now + timedelta(hours=8)).replace(minute=0)] = 100  # tonight's pass is clouded out
+    weather._cache[(40.4, -3.7)] = (float("inf"), hours)
+    f = build_forecast(40.4, -3.7, [FixedSource(tonight_pass, later_pass)], now=now)
+    assert f.tonight.highlight_event_id is None
+    assert f.tonight.next_worthwhile_event_id == later_pass.id
+    later = next(e for e in f.events if e.id == later_pass.id)
+    assert (later.geometry.brightness_code, later.geometry.height_code) == ("VERY_BRIGHT", "HIGH")
