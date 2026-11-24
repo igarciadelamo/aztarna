@@ -109,7 +109,8 @@ def test_dev_console_when_enabled(monkeypatch):
     monkeypatch.setenv("AZTARNA_DEV_UI", "1")
     r = TestClient(importlib.reload(main).app).get("/dev")
     assert r.status_code == 200
-    assert "Aztarna Dev Console" in r.text
+    assert "Aztarna Concept Console" in r.text
+    assert '"__TIPS__"' not in r.text and "Give your eyes 15" in r.text  # tip copy injected
     monkeypatch.delenv("AZTARNA_DEV_UI")
     importlib.reload(main)  # back to the default app for other tests
 

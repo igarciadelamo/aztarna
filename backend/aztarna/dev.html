@@ -3,61 +3,321 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Aztarna Dev Console</title>
+<title>Aztarna Concept Console</title>
 <style>
-  body { font: 14px system-ui, sans-serif; margin: 16px; color: #111; background: #fff; }
-  @media (prefers-color-scheme: dark) { body { color: #eee; background: #111; } a { color: #8bf; } }
-  fieldset { margin: 0 0 12px; }
-  input { width: 9em; }
-  #name { width: 16em; }
-  table { border-collapse: collapse; width: 100%; }
-  th, td { border: 1px solid #8884; padding: 4px 6px; text-align: left; vertical-align: top; }
-  .ok { color: #1a7f37; font-weight: 600; }
-  .no { color: #b35900; }
-  pre { overflow: auto; max-height: 40em; background: #8881; padding: 8px; }
-  #places button { margin: 2px; }
+  :root {
+    --bg: #000; --surface: #0e1016; --surface-2: #161923; --line: #262a36;
+    --text: #ecebe8; --muted: #8b8f9c; --accent: #ffb547; --ok: #7bd88f; --warn: #e0a35a; --unknown: #8b8f9c;
+    --sky: #0b1630; --path: var(--accent);
+  }
+  /* Night vision: everything dim red, so a glance doesn't ruin dark adaptation. */
+  :root[data-mode="red"] {
+    --bg: #000; --surface: #0d0000; --surface-2: #160000; --line: #3a0a0a;
+    --text: #d33a2c; --muted: #8a241b; --accent: #ff4a3a; --ok: #d33a2c; --warn: #a8291e; --unknown: #6e1d16;
+    --sky: #120000;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, sans-serif; }
+  button { font: inherit; color: inherit; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px; cursor: pointer; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  input { font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
+  .layout { display: flex; gap: 24px; padding: 16px; flex-wrap: wrap; justify-content: center; }
+
+  /* ---- Phone preview ---- */
+  .phone { width: 390px; max-width: 100%; height: 820px; max-height: calc(100vh - 32px); background: var(--bg); border: 1px solid var(--line); border-radius: 28px; position: relative; overflow: hidden; display: flex; flex-direction: column; }
+  .screen { flex: 1; overflow: auto; padding: 18px 16px 24px; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .brand { letter-spacing: .3em; font-weight: 600; font-size: 13px; color: var(--muted); }
+  .place { font-size: 13px; color: var(--muted); }
+  .hero { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 18px; }
+  .verdict { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+  .verdict.rest { color: var(--muted); }
+  .headline { font-size: 24px; font-weight: 650; margin: 6px 0 4px; line-height: 1.2; }
+  .sub { color: var(--muted); }
+  .countdown { display: inline-block; margin-top: 12px; padding: 4px 12px; border-radius: 999px; background: var(--accent); color: #000; font-weight: 650; font-variant-numeric: tabular-nums; }
+  :root[data-mode="red"] .countdown { color: #000; }
+  .dome { display: block; margin: 14px auto 0; width: 100%; max-width: 260px; }
+  .agenda h3 { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 22px 4px 6px; }
+  .row { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; padding: 10px 4px; }
+  .row.dim { opacity: .45; }
+  .icon { width: 26px; text-align: center; font-size: 18px; color: var(--accent); }
+  .row .name { flex: 1; }
+  .row .meta { color: var(--muted); font-size: 13px; }
+  .chip { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+  .chip.CLEAR, .chip.GOOD_CONDITIONS { color: var(--ok); }
+  .chip.TOO_CLOUDY { color: var(--warn); }
+  .chip.WEATHER_UNKNOWN { color: var(--unknown); }
+  .empty { color: var(--muted); padding: 12px 4px; }
+
+  /* ---- Detail sheet ---- */
+  .scrim { position: absolute; inset: 0; background: #000a; display: none; }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; max-height: 88%; overflow: auto; background: var(--surface); border-top: 1px solid var(--line); border-radius: 22px 22px 0 0; padding: 10px 18px 22px; transform: translateY(100%); transition: transform .2s ease; }
+  .open .scrim { display: block; }
+  .open .sheet { transform: none; }
+  .sheet:focus { outline: none; }
+  .grabber { width: 40px; height: 4px; border-radius: 4px; background: var(--line); margin: 0 auto 12px; }
+  .facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 12px 0; }
+  .facts dt { color: var(--muted); }
+  .facts dd { margin: 0; }
+  .notif { background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; margin: 12px 0; font-size: 14px; }
+  .notif b { display: block; font-size: 12px; color: var(--muted); font-weight: 500; margin-bottom: 2px; }
+  .tips { padding-left: 18px; margin: 6px 0; }
+  .tips li { margin: 4px 0; }
+
+  /* ---- Dev panel ---- */
+  .dev { width: 460px; max-width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 16px; align-self: flex-start; }
+  .dev h2 { margin: 0 0 4px; font-size: 16px; }
+  .dev p { color: var(--muted); margin: 0 0 12px; font-size: 13px; }
+  .dev form { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; align-items: center; }
+  .dev input.coord { width: 6.5em; }
+  #places button { margin: 2px 2px 2px 0; font-size: 13px; }
+  pre { overflow: auto; max-height: 26em; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px; font-size: 12px; }
+  details { margin-top: 10px; }
+  summary { cursor: pointer; color: var(--muted); }
 </style>
 </head>
 <body>
-<h1>Aztarna Dev Console</h1>
-<p>Local testing only. Times are shown in your browser's time zone; the API returns UTC.</p>
+<div class="layout">
 
-<fieldset>
-  <legend>Location</legend>
-  <form id="search">
-    <input id="name" placeholder="Place name, e.g. Bilbao">
-    <button>Search</button>
-    <button type="button" id="here">Use my location</button>
-  </form>
-  <div id="places"></div>
-  <form id="coords">
-    lat <input id="lat" type="number" step="0.1" min="-90" max="90" value="40.4" required>
-    lon <input id="lon" type="number" step="0.1" min="-180" max="180" value="-3.7" required>
-    <button>Get forecast</button>
-    <span id="status"></span>
-  </form>
-</fieldset>
+  <main class="phone" id="phone" aria-label="App concept preview">
+    <div class="screen">
+    <div class="topbar">
+      <span class="brand">AZTARNA</span>
+      <span class="place" id="place"></span>
+      <button id="mode" aria-pressed="false" title="Night vision: dim red UI that keeps your eyes dark-adapted">● Night vision</button>
+    </div>
+    <section class="hero" id="hero" aria-live="polite"></section>
+    <section class="agenda" id="agenda"></section>
+    </div>
+    <div class="scrim" id="scrim"></div>
+    <section class="sheet" id="sheet" tabindex="-1" role="dialog" aria-modal="true" aria-label="Event details"></section>
+  </main>
 
-<div id="tonight"></div>
-<div id="events"></div>
-<h3>Health</h3>
-<pre id="health"></pre>
-<details><summary>Raw forecast JSON</summary><pre id="raw"></pre></details>
+  <aside class="dev">
+    <h2>Dev panel</h2>
+    <p>Local testing only (<code>make run</code>). The phone preview shows the app concept from the live API. Times are in your browser's time zone.</p>
+    <form id="search">
+      <input id="name" placeholder="Place name, e.g. Bilbao" aria-label="Place name">
+      <button>Search</button>
+      <button type="button" id="here">Use my location</button>
+    </form>
+    <div id="places"></div>
+    <form id="coords">
+      lat <input class="coord" id="lat" type="number" step="0.1" min="-90" max="90" value="40.4" required>
+      lon <input class="coord" id="lon" type="number" step="0.1" min="-180" max="180" value="-3.7" required>
+      <button>Get forecast</button>
+      <span id="status"></span>
+    </form>
+    <details open><summary>Health</summary><pre id="health"></pre></details>
+    <details><summary>Raw forecast JSON</summary><pre id="raw"></pre></details>
+  </aside>
+</div>
 
 <script>
+const TIPS = "__TIPS__";  // replaced by the server with aztarna/tips.py TEXT (English source copy)
 const $ = (id) => document.getElementById(id);
-const time = (iso) => iso ? new Date(iso).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : "—";
-const esc = (s) => String(s ?? "—").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const hm = (iso) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+let forecast = null, placeName = "";
 
-function setCoords(lat, lon) {
-  $("lat").value = lat.toFixed(1);
-  $("lon").value = lon.toFixed(1);
-  $("coords").requestSubmit();
+// ---- Code → English words. In the app these are Android string resources. ----
+const ICON = { SATELLITE: "✦", MOON: "◐", PLANET: "●", METEOR_SHOWER: "☄", ECLIPSE: "◑" };
+const WORD = {
+  BRIGHTNESS: { VERY_BRIGHT: "very bright", BRIGHT: "bright", VISIBLE: "visible to the eye" },
+  HEIGHT: { HIGH: "high overhead", MID: "halfway up", LOW: "low in the sky" },
+  CONDITION: { CLEAR: "clear sky", PARTLY_CLOUDY: "partly cloudy", OVERCAST: "overcast" },
+  REASON: { GOOD_CONDITIONS: "clear", TOO_CLOUDY: "cloudy", WEATHER_UNKNOWN: "weather unknown" },
+};
+const COMPASS = { N: "north", NNE: "north-northeast", NE: "northeast", ENE: "east-northeast", E: "east", ESE: "east-southeast", SE: "southeast", SSE: "south-southeast", S: "south", SSW: "south-southwest", SW: "southwest", WSW: "west-southwest", W: "west", WNW: "west-northwest", NW: "northwest", NNW: "north-northwest" };
+const title = (code) => code.toLowerCase().replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+function name(e) {
+  const t = e.target;
+  if (t === "ISS") return "ISS";
+  if (t === "TIANGONG") return "Tiangong station";
+  if (t.endsWith("_OPPOSITION")) return `${title(t.replace("_OPPOSITION", ""))} at its brightest`;
+  if (t.endsWith("_CONJUNCTION")) { const [a, b] = t.replace("_CONJUNCTION", "").split("_"); return `${title(a)} & ${title(b)} together`; }
+  if (e.category === "METEOR_SHOWER") return `${title(t)} meteors`;
+  return title(t);
+}
+const g = (e) => e.geometry;
+const lookDir = (e) => g(e).start_direction || g(e).peak_direction;  // where to face first
+
+// ---- Nights: an event before local noon belongs to the previous date's night (formatting only). ----
+const nightKey = (iso) => { const d = new Date(new Date(iso).getTime() - 12 * 3600e3); return d.toDateString(); };
+function nightLabel(key) {
+  const today = nightKey(new Date().toISOString());
+  const tomorrow = nightKey(new Date(Date.now() + 864e5).toISOString());
+  if (key === today) return "Tonight";
+  if (key === tomorrow) return "Tomorrow night";
+  return `${new Date(key).toLocaleDateString([], { weekday: "long" })} night`;
 }
 
-// Geocoding runs in the browser against Open-Meteo, as the app's city picker will.
-$("search").onsubmit = async (e) => {
-  e.preventDefault();
+// ---- Sky dome: top-down view, horizon = rim, zenith = center, N up / E right (map orientation). ----
+function dome(e, size = 240) {
+  const R = size / 2 - 22, c = size / 2;
+  const pt = (az, alt) => { const r = R * (90 - Math.max(0, alt)) / 90, a = az * Math.PI / 180; return [c + r * Math.sin(a), c - r * Math.cos(a)]; };
+  const rings = [0, 30, 60].map((alt) => `<circle cx="${c}" cy="${c}" r="${R * (90 - alt) / 90}" fill="${alt ? "none" : "var(--sky)"}" stroke="var(--line)" ${alt ? 'stroke-dasharray="3 4"' : ""}/>`).join("");
+  const labels = [["N", 0], ["E", 90], ["S", 180], ["W", 270]].map(([l, az]) => { const [x, y] = pt(az, -12); return `<text x="${x}" y="${y + 4}" text-anchor="middle" font-size="12" fill="var(--muted)">${l}</text>`; }).join("");
+  const G = g(e);
+  let mark = "", label;
+  if (G.start_azimuth_deg != null) {
+    // Satellite path: start → peak → end along great circles (slerp on the sky sphere), so passes
+    // near the zenith draw as the smooth arc you actually see.
+    const rad = Math.PI / 180;
+    const vec = (az, alt) => [Math.cos(alt * rad) * Math.sin(az * rad), Math.cos(alt * rad) * Math.cos(az * rad), Math.sin(alt * rad)];
+    const seg = (az0, alt0, az1, alt1, n = 32) => {
+      const a = vec(az0, alt0), b = vec(az1, alt1);
+      const om = Math.acos(Math.min(1, a[0] * b[0] + a[1] * b[1] + a[2] * b[2])) || 1e-9;
+      return Array.from({ length: n + 1 }, (_, i) => {
+        const f = i / n, ka = Math.sin((1 - f) * om) / Math.sin(om), kb = Math.sin(f * om) / Math.sin(om);
+        const [x, y, z] = [0, 1, 2].map((k) => ka * a[k] + kb * b[k]);
+        return pt(Math.atan2(x, y) / rad, Math.asin(Math.max(-1, Math.min(1, z / Math.hypot(x, y, z)))) / rad);
+      });
+    };
+    const pts = [...seg(G.start_azimuth_deg, G.start_elevation_deg, G.peak_azimuth_deg, G.max_elevation_deg), ...seg(G.peak_azimuth_deg, G.max_elevation_deg, G.end_azimuth_deg, G.end_elevation_deg).slice(1)];
+    const [sx, sy] = pts[0], [ex, ey] = pts[pts.length - 1], [px, py] = pts[pts.length - 2];
+    const ang = Math.atan2(ey - py, ex - px) * 180 / Math.PI;
+    mark = `<polyline points="${pts.map((p) => p.join(",")).join(" ")}" fill="none" stroke="var(--path)" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="${sx}" cy="${sy}" r="5" fill="var(--path)"/>
+      <path d="M0,-6 L10,0 L0,6 z" fill="var(--path)" transform="translate(${ex},${ey}) rotate(${ang})"/>
+      <text x="${sx}" y="${sy - 10}" text-anchor="middle" font-size="11" fill="var(--text)">start</text>`;
+    label = `Path from ${COMPASS[G.start_direction]} to ${COMPASS[G.end_direction]}, up to ${Math.round(G.max_elevation_deg)} degrees`;
+  } else {
+    const [x, y] = pt(G.peak_azimuth_deg, G.max_elevation_deg);
+    const meteors = e.category === "METEOR_SHOWER";
+    mark = `${meteors ? `<circle cx="${c}" cy="${c}" r="${R * 0.92}" fill="var(--path)" opacity=".08"/>` : ""}
+      <circle cx="${x}" cy="${y}" r="${meteors ? 9 : 7}" fill="var(--path)" ${meteors ? 'opacity=".85"' : ""}/>
+      <text x="${x}" y="${y - 13}" text-anchor="middle" font-size="11" fill="var(--text)">${meteors ? "radiant" : "best view"}</text>`;
+    label = `${meteors ? "Radiant" : "Best view"} toward the ${COMPASS[G.peak_direction]}, ${Math.round(G.max_elevation_deg)} degrees up`;
+  }
+  return `<svg class="dome" viewBox="0 0 ${size} ${size}" role="img" aria-label="${esc(label)}">${rings}${labels}${mark}</svg>`;
+}
+
+// ---- Hero card ----
+function countdown(e) {
+  const now = Date.now(), start = Date.parse(e.timing.window_start), end = Date.parse(e.timing.window_end);
+  if (now >= start && now <= end) return "Now: look up";
+  const mins = Math.round((start - now) / 60e3);
+  if (mins <= 0) return "Over";
+  if (mins < 60) return `in ${mins} min`;
+  if (mins < 24 * 60) return `in ${Math.floor(mins / 60)} h ${mins % 60} min`;
+  return `at ${hm(e.timing.window_start)}`;
+}
+function summary(e) {
+  const G = g(e), bits = [];
+  if (e.weather) bits.push(WORD.CONDITION[e.weather.condition_code]);
+  if (G.brightness_code) bits.push(WORD.BRIGHTNESS[G.brightness_code]);
+  if (G.height_code) bits.push(WORD.HEIGHT[G.height_code]);
+  if (e.category === "SATELLITE") bits.push(`${Math.max(1, Math.round(e.timing.duration_seconds / 60))} min`);
+  if (G.rate_per_hour) bits.push(`~${G.rate_per_hour} meteors/h`);
+  return bits.filter(Boolean).join(" · ");
+}
+function headline(e) {
+  const when = e.category === "SATELLITE" ? hm(e.timing.window_start) : hm(e.timing.peak_time);
+  return `${name(e)} at ${when}, look ${lookDir(e) ?? "up"}`;
+}
+function renderHero() {
+  const f = forecast, t = f.tonight, byId = Object.fromEntries(f.events.map((e) => [e.id, e]));
+  const hero = byId[t.highlight_event_id];
+  if (hero) {
+    $("hero").innerHTML = `<div class="verdict">✦ Worth going out tonight</div>
+      <div class="headline">${esc(headline(hero))}</div>
+      <div class="sub">${esc(summary(hero))}</div>
+      <span class="countdown" id="countdown">${countdown(hero)}</span>
+      <button class="row" style="border:0;padding:0;margin-top:6px" data-id="${esc(hero.id)}" aria-label="Show where to look">${dome(hero)}</button>`;
+  } else {
+    const next = byId[t.next_worthwhile_event_id];
+    const why = t.condition_code === "OVERCAST" || t.condition_code === "PARTLY_CLOUDY"
+      ? `${title(WORD.CONDITION[t.condition_code])} tonight (${t.cloud_cover_percent}%)`
+      : t.dusk ? "No notable events tonight" : "No real night here right now";
+    $("hero").innerHTML = `<div class="verdict rest">Not tonight</div>
+      <div class="headline">${esc(why)}</div>
+      <div class="sub">${next ? `Next clear chance: ${esc(nightLabel(nightKey(next.timing.window_start)))}, ${esc(name(next))} at ${hm(next.timing.window_start)}` : "Nothing worthwhile in the next 5 days."}</div>`;
+  }
+}
+
+// ---- Agenda grouped by night ----
+function renderAgenda() {
+  const groups = new Map();
+  for (const e of forecast.events) {
+    const k = nightKey(e.timing.window_start);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(e);
+  }
+  if (!groups.size) { $("agenda").innerHTML = `<div class="empty">No events in the next 5 days.</div>`; return; }
+  $("agenda").innerHTML = [...groups].map(([k, events]) => `<h3>${esc(nightLabel(k))}</h3>` + events.map((e) => {
+    const r = e.evaluation.reason_code;
+    return `<button class="row ${e.evaluation.is_worth_looking ? "" : "dim"}" data-id="${esc(e.id)}">
+      <span class="icon" aria-hidden="true">${ICON[e.category]}</span>
+      <span class="name">${esc(name(e))}<br><span class="meta">${hm(e.category === "SATELLITE" ? e.timing.window_start : e.timing.peak_time)} · ${esc(lookDir(e) ?? "")}</span></span>
+      <span class="chip ${r}">${WORD.REASON[r]}</span>
+    </button>`;
+  }).join("")).join("");
+}
+
+// ---- Detail sheet ----
+function openSheet(id) {
+  const e = forecast.events.find((x) => x.id === id);
+  if (!e) return;
+  const G = g(e), T = e.timing, w = e.weather;
+  const facts = [
+    ["When", e.category === "SATELLITE" ? `${hm(T.window_start)} → ${hm(T.window_end)} (peak ${hm(T.peak_time)})` : `best at ${hm(T.peak_time)} (dark ${hm(T.window_start)}–${hm(T.window_end)})`],
+    ["Where", G.start_direction ? `${COMPASS[G.start_direction]} → ${COMPASS[G.end_direction]}` : `toward the ${COMPASS[G.peak_direction]}`],
+    ["Height", `${WORD.HEIGHT[G.height_code] ?? "—"} (${G.max_elevation_deg}°)`],
+    ["Brightness", G.brightness_code ? `${WORD.BRIGHTNESS[G.brightness_code]}${G.magnitude != null ? ` (mag ${G.magnitude})` : ""}` : "—"],
+    ...(G.rate_per_hour ? [["Meteors", `~${G.rate_per_hour}/h, Moon ${G.moon_illumination_percent}% lit, ${G.moon_elevation_deg > 0 ? "up" : "down"}`]] : []),
+    ["Weather", w ? `${WORD.CONDITION[w.condition_code]} (${w.cloud_cover_percent}% clouds)` : "unknown"],
+  ];
+  const notif = T.notify_at
+    ? `<div class="notif"><b>Notification at ${hm(T.notify_at)} · weather re-checked at ${hm(T.recheck_at)}</b>${esc(name(e))} in 30 min · look ${esc(lookDir(e) ?? "up")} · ${esc(w ? WORD.CONDITION[w.condition_code] : "")} <u>Show me where</u></div>`
+    : `<div class="notif"><b>No notification</b>Only clear-sky events alert you; this one is ${WORD.REASON[e.evaluation.reason_code]}.</div>`;
+  $("sheet").innerHTML = `<div class="grabber"></div>
+    <div class="verdict ${e.evaluation.is_worth_looking ? "" : "rest"}">${ICON[e.category]} ${e.evaluation.is_worth_looking ? "Worth looking" : WORD.REASON[e.evaluation.reason_code]}</div>
+    <div class="headline">${esc(name(e))}</div>
+    <div class="sub">${esc(summary(e))}</div>
+    ${dome(e, 280)}
+    <dl class="facts">${facts.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
+    ${notif}
+    <b>How to enjoy it</b>
+    <ul class="tips">${e.tips.slice(0, 3).map((c) => `<li>${esc(TIPS[c] ?? c)}</li>`).join("")}</ul>
+    ${e.tips.length > 3 ? `<details><summary>${e.tips.length - 3} more tips</summary><ul class="tips">${e.tips.slice(3).map((c) => `<li>${esc(TIPS[c] ?? c)}</li>`).join("")}</ul></details>` : ""}
+    <details><summary>Raw event</summary><pre>${esc(JSON.stringify(e, null, 2))}</pre></details>
+    <p><button id="close">Close</button></p>`;
+  $("phone").classList.add("open");
+  $("sheet").scrollTop = 0;
+  $("sheet").focus({ preventScroll: true });
+  const u = new URL(location.href); u.searchParams.set("event", id); history.replaceState(null, "", u);
+}
+function closeSheet() {
+  $("phone").classList.remove("open");
+  const u = new URL(location.href); u.searchParams.delete("event"); history.replaceState(null, "", u);
+}
+$("phone").addEventListener("click", (ev) => {
+  const row = ev.target.closest("[data-id]");
+  if (row) openSheet(row.dataset.id);
+  if (ev.target.id === "scrim" || ev.target.id === "close") closeSheet();
+});
+document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") closeSheet(); });
+
+// ---- Night vision ----
+function setRed(red) {
+  document.documentElement.dataset.mode = red ? "red" : "";
+  $("mode").setAttribute("aria-pressed", red);
+  const u = new URL(location.href);
+  red ? u.searchParams.set("mode", "red") : u.searchParams.delete("mode");
+  history.replaceState(null, "", u);
+}
+$("mode").onclick = () => setRed(document.documentElement.dataset.mode !== "red");
+
+// ---- Dev panel: location + fetch ----
+function setCoords(lat, lon, label = "") {
+  $("lat").value = lat.toFixed(1);
+  $("lon").value = lon.toFixed(1);
+  placeName = label;
+  $("coords").requestSubmit();
+}
+$("search").onsubmit = async (ev) => {
+  ev.preventDefault();
   const q = $("name").value.trim();
   if (!q) return;
   $("places").textContent = "Searching…";
@@ -67,61 +327,49 @@ $("search").onsubmit = async (e) => {
     $("places").innerHTML = results.length ? "" : "No matches.";
     for (const p of results) {
       const b = document.createElement("button");
+      b.type = "button";
       b.textContent = `${p.name}, ${p.admin1 ?? ""} ${p.country_code ?? ""} (${p.latitude.toFixed(1)}, ${p.longitude.toFixed(1)})`;
-      b.onclick = () => setCoords(p.latitude, p.longitude);
+      b.onclick = () => setCoords(p.latitude, p.longitude, p.name);
       $("places").append(b);
     }
-  } catch (err) {
-    $("places").textContent = `Geocoding failed: ${err}`;
-  }
+  } catch (err) { $("places").textContent = `Geocoding failed: ${err}`; }
 };
-
 $("here").onclick = () => navigator.geolocation.getCurrentPosition(
-  (pos) => setCoords(pos.coords.latitude, pos.coords.longitude),
+  (pos) => setCoords(pos.coords.latitude, pos.coords.longitude, "My location"),
   (err) => { $("places").textContent = `Location unavailable: ${err.message}`; },
 );
-
-$("coords").onsubmit = async (e) => {
-  e.preventDefault();
+$("coords").onsubmit = async (ev) => {
+  ev.preventDefault();
   const params = new URLSearchParams({ lat: $("lat").value, lon: $("lon").value });
+  const current = new URLSearchParams(location.search);
+  const wanted = current.get("event");  // shareable open detail
+  if (current.get("mode") === "red") params.set("mode", "red");
   history.replaceState(null, "", `?${params}`);
+  params.delete("mode");
   $("status").textContent = "Loading…";
   const t0 = performance.now();
   const r = await fetch(`/v1/sky-forecast?${params}`);
   const body = await r.json();
-  $("status").textContent = `${r.status} in ${Math.round(performance.now() - t0)} ms`;
+  $("status").textContent = `${r.status} · ${Math.round(performance.now() - t0)} ms`;
   $("raw").textContent = JSON.stringify(body, null, 2);
-  if (!r.ok) { $("tonight").textContent = ""; $("events").textContent = ""; return; }
-  render(body);
+  $("place").textContent = placeName || `${params.get("lat")}, ${params.get("lon")}`;
+  if (!r.ok) { $("hero").textContent = body.error; $("agenda").textContent = ""; return; }
+  forecast = body;
+  closeSheet();
+  renderHero();
+  renderAgenda();
+  if (wanted === "first" && body.events.length) openSheet(body.events[0].id);
+  else if (wanted) openSheet(wanted);
   $("health").textContent = JSON.stringify(await (await fetch("/health")).json(), null, 2);
 };
+setInterval(() => {
+  const el = $("countdown"), hero = forecast?.events.find((e) => e.id === forecast.tonight.highlight_event_id);
+  if (el && hero) el.textContent = countdown(hero);
+}, 1000);
 
-function render(f) {
-  const n = f.tonight;
-  $("tonight").innerHTML = `<h3>Tonight</h3>
-    <p>Dusk ${time(n.dusk)} → dawn ${time(n.dawn)} · clouds ${esc(n.cloud_cover_percent)}% ${esc(n.condition_code)}
-    · highlight: <b>${esc(n.highlight_event_id ?? "none (rest state)")}</b></p>
-    <p>Generated ${time(f.generated_at)}, valid until ${time(f.valid_until)}</p>`;
-  const rows = f.events.map((e) => {
-    const g = e.geometry, w = e.weather, v = e.evaluation;
-    return `<tr>
-      <td><b>${esc(e.target)}</b><br>${esc(e.category)}<br><small>${esc(e.source)}</small></td>
-      <td>${time(e.timing.window_start)} → ${time(e.timing.window_end)}<br>peak ${time(e.timing.peak_time)}<br>${Math.round(e.timing.duration_seconds / 60)} min</td>
-      <td>alt ${esc(g.max_elevation_deg)}°<br>${esc(g.start_direction)} → ${esc(g.end_direction)}<br>mag ${esc(g.magnitude)}
-        ${g.rate_per_hour != null ? `<br>${g.rate_per_hour}/h, moon ${g.moon_illumination_percent}% at ${g.moon_elevation_deg}°` : ""}</td>
-      <td>${w ? `${w.cloud_cover_percent}% ${esc(w.condition_code)}` : "unknown"}</td>
-      <td class="${v.is_worth_looking ? "ok" : "no"}">${esc(v.reason_code)}</td>
-      <td>notify ${time(e.timing.notify_at)}<br>recheck ${time(e.timing.recheck_at)}</td>
-      <td><small>${e.tips.map(esc).join("<br>")}</small></td>
-    </tr>`;
-  }).join("");
-  $("events").innerHTML = `<h3>Events (${f.events.length})</h3>
-    <table><tr><th>Event</th><th>When</th><th>Geometry</th><th>Weather</th><th>Verdict</th><th>Alerts</th><th>Tips</th></tr>${rows}</table>`;
-}
-
-// Restore coordinates from the URL so a view can be shared/reloaded.
 const q = new URLSearchParams(location.search);
 if (q.has("lat") && q.has("lon")) { $("lat").value = q.get("lat"); $("lon").value = q.get("lon"); }
+if (q.get("mode") === "red") setRed(true);
 $("coords").requestSubmit();
 </script>
 </body>
